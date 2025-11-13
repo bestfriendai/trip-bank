@@ -86,6 +86,7 @@ struct TripCanvasView: View {
                 ExpandedMomentView(
                     moment: moment,
                     mediaItems: mediaItemsForMoment(moment),
+                    tripId: trip.id,
                     isPresented: $showingExpandedMoment
                 )
             }

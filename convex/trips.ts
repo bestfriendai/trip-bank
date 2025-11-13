@@ -140,10 +140,9 @@ export const addMediaItem = mutation({
   args: {
     mediaItemId: v.string(),
     tripId: v.string(),
-    imageName: v.string(),
+    storageId: v.optional(v.id("_storage")),
     imageURL: v.optional(v.string()),
     videoURL: v.optional(v.string()),
-    storageId: v.optional(v.id("_storage")),
     type: v.union(v.literal("photo"), v.literal("video")),
     captureDate: v.optional(v.number()),
     note: v.optional(v.string()),
@@ -158,10 +157,9 @@ export const addMediaItem = mutation({
       userId,
       mediaItemId: args.mediaItemId,
       tripId: args.tripId,
-      imageName: args.imageName,
+      storageId: args.storageId,
       imageURL: args.imageURL,
       videoURL: args.videoURL,
-      storageId: args.storageId,
       type: args.type,
       captureDate: args.captureDate,
       note: args.note,
@@ -316,5 +314,165 @@ export const getMoments = query({
       .collect();
 
     return moments;
+  },
+});
+
+// ============= DELETE MUTATIONS =============
+
+// Delete a media item
+export const deleteMediaItem = mutation({
+  args: {
+    mediaItemId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+
+    // Find the media item
+    const mediaItem = await ctx.db
+      .query("mediaItems")
+      .withIndex("by_mediaItemId", (q) => q.eq("mediaItemId", args.mediaItemId))
+      .first();
+
+    if (!mediaItem) {
+      throw new Error(`Media item not found: ${args.mediaItemId}`);
+    }
+
+    // Verify ownership
+    if (mediaItem.userId !== userId) {
+      throw new Error("Unauthorized: You don't own this media item");
+    }
+
+    // Delete file from storage if it exists
+    if (mediaItem.storageId) {
+      await ctx.storage.delete(mediaItem.storageId);
+    }
+
+    // Delete the media item
+    await ctx.db.delete(mediaItem._id);
+
+    return { success: true };
+  },
+});
+
+// Delete a moment
+export const deleteMoment = mutation({
+  args: {
+    momentId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+
+    // Find the moment
+    const moment = await ctx.db
+      .query("moments")
+      .withIndex("by_momentId", (q) => q.eq("momentId", args.momentId))
+      .first();
+
+    if (!moment) {
+      throw new Error(`Moment not found: ${args.momentId}`);
+    }
+
+    // Verify ownership
+    if (moment.userId !== userId) {
+      throw new Error("Unauthorized: You don't own this moment");
+    }
+
+    // Delete the moment
+    await ctx.db.delete(moment._id);
+
+    return { success: true };
+  },
+});
+
+// ============= UPDATE MUTATIONS =============
+
+// Update a media item
+export const updateMediaItem = mutation({
+  args: {
+    mediaItemId: v.string(),
+    note: v.optional(v.string()),
+    captureDate: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+
+    // Find the media item
+    const mediaItem = await ctx.db
+      .query("mediaItems")
+      .withIndex("by_mediaItemId", (q) => q.eq("mediaItemId", args.mediaItemId))
+      .first();
+
+    if (!mediaItem) {
+      throw new Error(`Media item not found: ${args.mediaItemId}`);
+    }
+
+    // Verify ownership
+    if (mediaItem.userId !== userId) {
+      throw new Error("Unauthorized: You don't own this media item");
+    }
+
+    const updates: any = {
+      updatedAt: Date.now(),
+    };
+
+    if (args.note !== undefined) updates.note = args.note;
+    if (args.captureDate !== undefined) updates.captureDate = args.captureDate;
+
+    await ctx.db.patch(mediaItem._id, updates);
+    return { success: true };
+  },
+});
+
+// Update a moment
+export const updateMoment = mutation({
+  args: {
+    momentId: v.string(),
+    title: v.optional(v.string()),
+    note: v.optional(v.string()),
+    mediaItemIDs: v.optional(v.array(v.string())),
+    date: v.optional(v.number()),
+    placeName: v.optional(v.string()),
+    eventName: v.optional(v.string()),
+    importance: v.optional(
+      v.union(
+        v.literal("small"),
+        v.literal("medium"),
+        v.literal("large"),
+        v.literal("hero")
+      )
+    ),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+
+    // Find the moment
+    const moment = await ctx.db
+      .query("moments")
+      .withIndex("by_momentId", (q) => q.eq("momentId", args.momentId))
+      .first();
+
+    if (!moment) {
+      throw new Error(`Moment not found: ${args.momentId}`);
+    }
+
+    // Verify ownership
+    if (moment.userId !== userId) {
+      throw new Error("Unauthorized: You don't own this moment");
+    }
+
+    const updates: any = {
+      updatedAt: Date.now(),
+    };
+
+    if (args.title !== undefined) updates.title = args.title;
+    if (args.note !== undefined) updates.note = args.note;
+    if (args.mediaItemIDs !== undefined) updates.mediaItemIDs = args.mediaItemIDs;
+    if (args.date !== undefined) updates.date = args.date;
+    if (args.placeName !== undefined) updates.placeName = args.placeName;
+    if (args.eventName !== undefined) updates.eventName = args.eventName;
+    if (args.importance !== undefined) updates.importance = args.importance;
+
+    await ctx.db.patch(moment._id, updates);
+    return { success: true };
   },
 });

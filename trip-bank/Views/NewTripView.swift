@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct NewTripView: View {
+    let trip: Trip? // Optional: if provided, we're editing
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var tripStore: TripStore
 
@@ -9,6 +10,10 @@ struct NewTripView: View {
     @State private var endDate = Date()
     @State private var isCreating = false
     @State private var showError = false
+
+    private var isEditing: Bool {
+        trip != nil
+    }
 
     var body: some View {
         NavigationStack {
@@ -36,8 +41,15 @@ struct NewTripView: View {
                     }
                 }
             }
-            .navigationTitle("New Trip")
+            .navigationTitle(isEditing ? "Edit Trip" : "New Trip")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                if let trip = trip {
+                    title = trip.title
+                    startDate = trip.startDate
+                    endDate = trip.endDate
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -47,8 +59,12 @@ struct NewTripView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        createTrip()
+                    Button(isEditing ? "Save" : "Create") {
+                        if isEditing {
+                            updateTrip()
+                        } else {
+                            createTrip()
+                        }
                     }
                     .disabled(title.isEmpty || isCreating)
                 }
@@ -87,9 +103,32 @@ struct NewTripView: View {
             }
         }
     }
+
+    private func updateTrip() {
+        guard let existingTrip = trip else { return }
+        isCreating = true
+
+        var updatedTrip = existingTrip
+        updatedTrip.title = title
+        updatedTrip.startDate = startDate
+        updatedTrip.endDate = endDate
+
+        tripStore.updateTrip(updatedTrip)
+
+        // Give a brief moment for the backend call to complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isCreating = false
+
+            if tripStore.errorMessage != nil {
+                showError = true
+            } else {
+                dismiss()
+            }
+        }
+    }
 }
 
 #Preview {
-    NewTripView()
+    NewTripView(trip: nil)
         .environmentObject(TripStore())
 }

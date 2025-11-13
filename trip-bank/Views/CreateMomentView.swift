@@ -1,9 +1,10 @@
 import SwiftUI
 import PhotosUI
 
-// View for creating a new moment from selected media
+// View for creating or editing a moment
 struct CreateMomentView: View {
     let trip: Trip
+    let moment: Moment? // Optional: if provided, we're editing
     @EnvironmentObject var tripStore: TripStore
     @Environment(\.dismiss) var dismiss
 
@@ -14,6 +15,10 @@ struct CreateMomentView: View {
     @State private var date = Date()
     @State private var importance: MomentImportance = .medium
     @State private var selectedMediaItems: Set<UUID> = []
+
+    private var isEditing: Bool {
+        moment != nil
+    }
 
     var body: some View {
         NavigationStack {
@@ -65,8 +70,19 @@ struct CreateMomentView: View {
                     }
                 }
             }
-            .navigationTitle("Create Moment")
+            .navigationTitle(isEditing ? "Edit Moment" : "Create Moment")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                if let moment = moment {
+                    title = moment.title
+                    note = moment.note ?? ""
+                    placeName = moment.placeName ?? ""
+                    eventName = moment.eventName ?? ""
+                    date = moment.date ?? Date()
+                    importance = moment.importance
+                    selectedMediaItems = Set(moment.mediaItemIDs)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -74,8 +90,12 @@ struct CreateMomentView: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        createMoment()
+                    Button(isEditing ? "Save" : "Create") {
+                        if isEditing {
+                            updateMoment()
+                        } else {
+                            createMoment()
+                        }
                     }
                     .disabled(title.isEmpty || selectedMediaItems.isEmpty)
                 }
@@ -84,7 +104,7 @@ struct CreateMomentView: View {
     }
 
     private func createMoment() {
-        let moment = Moment(
+        let newMoment = Moment(
             title: title,
             note: note.isEmpty ? nil : note,
             mediaItemIDs: Array(selectedMediaItems),
@@ -94,7 +114,23 @@ struct CreateMomentView: View {
             importance: importance
         )
 
-        tripStore.addMoment(to: trip.id, moment: moment)
+        tripStore.addMoment(to: trip.id, moment: newMoment)
+        dismiss()
+    }
+
+    private func updateMoment() {
+        guard let existingMoment = moment else { return }
+
+        var updatedMoment = existingMoment
+        updatedMoment.title = title
+        updatedMoment.note = note.isEmpty ? nil : note
+        updatedMoment.mediaItemIDs = Array(selectedMediaItems)
+        updatedMoment.date = date
+        updatedMoment.placeName = placeName.isEmpty ? nil : placeName
+        updatedMoment.eventName = eventName.isEmpty ? nil : eventName
+        updatedMoment.importance = importance
+
+        tripStore.updateMoment(in: trip.id, moment: updatedMoment)
         dismiss()
     }
 }
@@ -145,11 +181,6 @@ struct MediaThumbnailView: View {
                             Color.gray.opacity(0.2)
                         }
                     }
-                } else if !mediaItem.imageName.isEmpty,
-                          let image = ImageManager.shared.getImage(named: mediaItem.imageName) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
                 } else if isLoading {
                     ZStack {
                         Color.gray.opacity(0.2)
@@ -209,6 +240,6 @@ struct MediaThumbnailView: View {
 }
 
 #Preview {
-    CreateMomentView(trip: Trip(title: "Test Trip"))
+    CreateMomentView(trip: Trip(title: "Test Trip"), moment: nil)
         .environmentObject(TripStore())
 }

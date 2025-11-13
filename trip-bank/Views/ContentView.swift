@@ -73,7 +73,7 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showingNewTripSheet) {
-                NewTripView()
+                NewTripView(trip: nil)
             }
         }
     }

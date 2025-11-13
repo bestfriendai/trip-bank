@@ -45,11 +45,6 @@ struct MediaImageView: View {
                     ProgressView()
                         .tint(.white)
                 }
-            } else if !mediaItem.imageName.isEmpty,
-                      let image = ImageManager.shared.getImage(named: mediaItem.imageName) {
-                // Fallback: Load from legacy local storage
-                Image(uiImage: image)
-                    .resizable()
             } else {
                 placeholderImage
             }

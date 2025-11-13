@@ -248,11 +248,10 @@ class ConvexClient {
 
     // MARK: - Media Item Mutations
 
-    func addMediaItem(id: String, tripId: String, imageName: String, imageURL: String? = nil, videoURL: String? = nil, storageId: String? = nil, type: String, captureDate: Date? = nil, note: String? = nil, timestamp: Date) async throws -> String {
+    func addMediaItem(id: String, tripId: String, imageURL: String? = nil, videoURL: String? = nil, storageId: String? = nil, type: String, captureDate: Date? = nil, note: String? = nil, timestamp: Date) async throws -> String {
         var args: [String: Any] = [
             "mediaItemId": id,
             "tripId": tripId,
-            "imageName": imageName,
             "type": type,
             "timestamp": timestamp.timeIntervalSince1970 * 1000
         ]
@@ -274,6 +273,28 @@ class ConvexClient {
         }
 
         return try await callMutation("trips:addMediaItem", args: args)
+    }
+
+    func deleteMediaItem(id: String) async throws -> DeleteResponse {
+        let args: [String: Any] = [
+            "mediaItemId": id
+        ]
+        return try await callMutation("trips:deleteMediaItem", args: args)
+    }
+
+    func updateMediaItem(id: String, note: String? = nil, captureDate: Date? = nil) async throws -> DeleteResponse {
+        var args: [String: Any] = [
+            "mediaItemId": id
+        ]
+
+        if let note = note {
+            args["note"] = note
+        }
+        if let captureDate = captureDate {
+            args["captureDate"] = captureDate.timeIntervalSince1970 * 1000
+        }
+
+        return try await callMutation("trips:updateMediaItem", args: args)
     }
 
     // MARK: - Moment Mutations
@@ -314,6 +335,43 @@ class ConvexClient {
         }
 
         return try await callMutation("trips:addMoment", args: args)
+    }
+
+    func updateMoment(id: String, title: String? = nil, note: String? = nil, mediaItemIDs: [String]? = nil, date: Date? = nil, placeName: String? = nil, eventName: String? = nil, importance: String? = nil) async throws -> DeleteResponse {
+        var args: [String: Any] = [
+            "momentId": id
+        ]
+
+        if let title = title {
+            args["title"] = title
+        }
+        if let note = note {
+            args["note"] = note
+        }
+        if let mediaItemIDs = mediaItemIDs {
+            args["mediaItemIDs"] = mediaItemIDs
+        }
+        if let date = date {
+            args["date"] = date.timeIntervalSince1970 * 1000
+        }
+        if let placeName = placeName {
+            args["placeName"] = placeName
+        }
+        if let eventName = eventName {
+            args["eventName"] = eventName
+        }
+        if let importance = importance {
+            args["importance"] = importance
+        }
+
+        return try await callMutation("trips:updateMoment", args: args)
+    }
+
+    func deleteMoment(id: String) async throws -> DeleteResponse {
+        let args: [String: Any] = [
+            "momentId": id
+        ]
+        return try await callMutation("trips:deleteMoment", args: args)
     }
 }
 
@@ -379,7 +437,6 @@ struct ConvexMediaItem: Decodable {
     let _creationTime: Double
     let mediaItemId: String
     let tripId: String
-    let imageName: String
     let storageId: String?
     let imageURL: String?
     let videoURL: String?
@@ -472,7 +529,6 @@ extension ConvexMediaItem {
     func toMediaItem() -> MediaItem {
         return MediaItem(
             id: UUID(uuidString: mediaItemId) ?? UUID(),
-            imageName: imageName,
             storageId: storageId,
             imageURL: imageURL.flatMap { URL(string: $0) },
             videoURL: videoURL.flatMap { URL(string: $0) },

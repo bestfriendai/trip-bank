@@ -34,10 +34,9 @@ export default defineSchema({
     userId: v.string(), // Owner
     mediaItemId: v.string(), // UUID from Swift
     tripId: v.string(), // Reference to parent trip
-    imageName: v.string(),
+    storageId: v.optional(v.id("_storage")), // Convex file storage ID
     imageURL: v.optional(v.string()),
     videoURL: v.optional(v.string()),
-    storageId: v.optional(v.id("_storage")), // Convex file storage ID
     type: v.union(v.literal("photo"), v.literal("video")),
     captureDate: v.optional(v.number()), // Timestamp
     note: v.optional(v.string()),

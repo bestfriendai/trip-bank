@@ -4,9 +4,13 @@ import SwiftUI
 struct ExpandedMomentView: View {
     let moment: Moment
     let mediaItems: [MediaItem]
+    let tripId: UUID
     @Binding var isPresented: Bool
+    @EnvironmentObject var tripStore: TripStore
 
     @State private var currentPhotoIndex = 0
+    @State private var showingEditMoment = false
+    @State private var showingDeleteConfirmation = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -15,9 +19,31 @@ struct ExpandedMomentView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Close button
+                // Top bar with close and menu buttons
                 HStack {
+                    Menu {
+                        Button {
+                            showingEditMoment = true
+                        } label: {
+                            Label("Edit Moment", systemImage: "pencil")
+                        }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Delete Moment", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding()
+                    }
+
                     Spacer()
+
                     Button {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                             isPresented = false
@@ -91,7 +117,25 @@ struct ExpandedMomentView: View {
                 .padding(.top, 16)
             }
         }
+        .sheet(isPresented: $showingEditMoment) {
+            if let trip = tripStore.trips.first(where: { $0.id == tripId }) {
+                CreateMomentView(trip: trip, moment: moment)
+            }
+        }
+        .alert("Delete Moment?", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                deleteMoment()
+            }
+        } message: {
+            Text("This will permanently delete this moment. The photos will remain in your trip.")
+        }
         .transition(.scale.combined(with: .opacity))
+    }
+
+    private func deleteMoment() {
+        tripStore.deleteMoment(from: tripId, momentID: moment.id)
+        isPresented = false
     }
 
     private func formatDate(_ date: Date) -> String {

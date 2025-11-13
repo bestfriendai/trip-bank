@@ -5,6 +5,10 @@ struct TripDetailView: View {
     @EnvironmentObject var tripStore: TripStore
     @State private var showingMediaPicker = false
     @State private var showingCreateMoment = false
+    @State private var showingEditTrip = false
+    @State private var showingDeleteConfirmation = false
+    @State private var showingManageMedia = false
+    @Environment(\.dismiss) var dismiss
 
     // Get the latest version of the trip from the store
     private var currentTrip: Trip {
@@ -44,13 +48,62 @@ struct TripDetailView: View {
                         .font(.title2)
                 }
             }
+
+            ToolbarItem(placement: .secondaryAction) {
+                Menu {
+                    if !currentTrip.mediaItems.isEmpty {
+                        Button {
+                            showingManageMedia = true
+                        } label: {
+                            Label("Manage Photos", systemImage: "photo.stack")
+                        }
+
+                        Divider()
+                    }
+
+                    Button {
+                        showingEditTrip = true
+                    } label: {
+                        Label("Edit Trip", systemImage: "pencil")
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
+                    } label: {
+                        Label("Delete Trip", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
         }
         .sheet(isPresented: $showingMediaPicker) {
             MediaPickerView(trip: trip)
         }
         .sheet(isPresented: $showingCreateMoment) {
-            CreateMomentView(trip: currentTrip)
+            CreateMomentView(trip: currentTrip, moment: nil)
         }
+        .sheet(isPresented: $showingEditTrip) {
+            NewTripView(trip: currentTrip)
+        }
+        .sheet(isPresented: $showingManageMedia) {
+            ManageMediaView(trip: currentTrip)
+        }
+        .alert("Delete Trip?", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                deleteTrip()
+            }
+        } message: {
+            Text("This will delete the trip and all its photos and moments. This action cannot be undone.")
+        }
+    }
+
+    private func deleteTrip() {
+        tripStore.deleteTrip(at: IndexSet(integer: tripStore.trips.firstIndex(where: { $0.id == trip.id }) ?? 0))
+        dismiss()
     }
 
     private var emptyMomentsState: some View {

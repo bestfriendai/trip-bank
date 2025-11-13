@@ -140,7 +140,6 @@ class TripStore: ObservableObject {
                     _ = try await convexClient.addMediaItem(
                         id: mediaItem.id.uuidString,
                         tripId: tripID.uuidString,
-                        imageName: mediaItem.imageName,
                         imageURL: mediaItem.imageURL?.absoluteString,
                         videoURL: mediaItem.videoURL?.absoluteString,
                         storageId: mediaItem.storageId,
@@ -196,19 +195,89 @@ class TripStore: ObservableObject {
     }
 
     func updateMoment(in tripID: UUID, moment: Moment) {
-        // Note: We would need to add an updateMoment mutation to Convex for this
-        // For now, just update locally
-        if let tripIndex = trips.firstIndex(where: { $0.id == tripID }),
-           let momentIndex = trips[tripIndex].moments.firstIndex(where: { $0.id == moment.id }) {
-            trips[tripIndex].moments[momentIndex] = moment
+        Task {
+            do {
+                // Update on backend
+                _ = try await convexClient.updateMoment(
+                    id: moment.id.uuidString,
+                    title: moment.title,
+                    note: moment.note,
+                    mediaItemIDs: moment.mediaItemIDs.map { $0.uuidString },
+                    date: moment.date,
+                    placeName: moment.placeName,
+                    eventName: moment.eventName,
+                    importance: moment.importance.rawValue
+                )
+
+                // Update local state
+                if let tripIndex = trips.firstIndex(where: { $0.id == tripID }),
+                   let momentIndex = trips[tripIndex].moments.firstIndex(where: { $0.id == moment.id }) {
+                    trips[tripIndex].moments[momentIndex] = moment
+                }
+            } catch {
+                errorMessage = "Failed to update moment: \(error.localizedDescription)"
+                print("Error updating moment: \(error)")
+            }
         }
     }
 
     func deleteMoment(from tripID: UUID, momentID: UUID) {
-        // Note: We would need to add a deleteMoment mutation to Convex for this
-        // For now, just delete locally
-        if let tripIndex = trips.firstIndex(where: { $0.id == tripID }) {
-            trips[tripIndex].moments.removeAll { $0.id == momentID }
+        Task {
+            do {
+                // Delete from backend
+                _ = try await convexClient.deleteMoment(id: momentID.uuidString)
+
+                // Update local state
+                if let tripIndex = trips.firstIndex(where: { $0.id == tripID }) {
+                    trips[tripIndex].moments.removeAll { $0.id == momentID }
+                }
+            } catch {
+                errorMessage = "Failed to delete moment: \(error.localizedDescription)"
+                print("Error deleting moment: \(error)")
+            }
+        }
+    }
+
+    // MARK: - Delete Media Item
+
+    func deleteMediaItem(from tripID: UUID, mediaItemID: UUID) {
+        Task {
+            do {
+                // Delete from backend
+                _ = try await convexClient.deleteMediaItem(id: mediaItemID.uuidString)
+
+                // Update local state
+                if let tripIndex = trips.firstIndex(where: { $0.id == tripID }) {
+                    trips[tripIndex].mediaItems.removeAll { $0.id == mediaItemID }
+                }
+            } catch {
+                errorMessage = "Failed to delete media item: \(error.localizedDescription)"
+                print("Error deleting media item: \(error)")
+            }
+        }
+    }
+
+    // MARK: - Update Media Item
+
+    func updateMediaItem(in tripID: UUID, mediaItem: MediaItem) {
+        Task {
+            do {
+                // Update on backend
+                _ = try await convexClient.updateMediaItem(
+                    id: mediaItem.id.uuidString,
+                    note: mediaItem.note,
+                    captureDate: mediaItem.captureDate
+                )
+
+                // Update local state
+                if let tripIndex = trips.firstIndex(where: { $0.id == tripID }),
+                   let mediaIndex = trips[tripIndex].mediaItems.firstIndex(where: { $0.id == mediaItem.id }) {
+                    trips[tripIndex].mediaItems[mediaIndex] = mediaItem
+                }
+            } catch {
+                errorMessage = "Failed to update media item: \(error.localizedDescription)"
+                print("Error updating media item: \(error)")
+            }
         }
     }
 

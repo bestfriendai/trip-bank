@@ -8,7 +8,6 @@ enum MediaType: String, Codable {
 
 struct MediaItem: Identifiable, Codable {
     let id: UUID
-    var imageName: String // Reference to stored image/video thumbnail (legacy)
     var storageId: String? // Convex storage ID
     var imageURL: URL? // For remote images (e.g., Unsplash)
     var videoURL: URL? // For video files
@@ -18,7 +17,6 @@ struct MediaItem: Identifiable, Codable {
     var timestamp: Date // When added to the trip
 
     init(id: UUID = UUID(),
-         imageName: String = "",
          storageId: String? = nil,
          imageURL: URL? = nil,
          videoURL: URL? = nil,
@@ -27,7 +25,6 @@ struct MediaItem: Identifiable, Codable {
          note: String? = nil,
          timestamp: Date = Date()) {
         self.id = id
-        self.imageName = imageName
         self.storageId = storageId
         self.imageURL = imageURL
         self.videoURL = videoURL
