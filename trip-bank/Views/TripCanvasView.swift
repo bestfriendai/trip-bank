@@ -2,7 +2,7 @@ import SwiftUI
 
 // Main grid-based canvas view for displaying trip moments
 struct TripCanvasView: View {
-    let trip: Trip
+    let tripId: UUID
     @EnvironmentObject var tripStore: TripStore
     @State private var selectedMoment: Moment?
     @State private var showingExpandedMoment = false
@@ -19,6 +19,11 @@ struct TripCanvasView: View {
     @State private var resizingMoment: Moment?
     @State private var previewWidth: Double = 1
     @State private var previewHeight: Double = 1.5
+
+    // Get the latest version of the trip from the store
+    private var trip: Trip {
+        tripStore.trips.first(where: { $0.id == tripId }) ?? Trip(id: tripId, title: "Unknown")
+    }
 
     private var momentLayouts: [UUID: MomentLayout] {
         GridLayoutCalculator.calculateLayout(for: trip.moments, canvasWidth: canvasSize.width)
@@ -69,13 +74,21 @@ struct TripCanvasView: View {
                     canvasSize = newSize
                 }
             }
+            .onChange(of: trip.moments.count) { _, _ in
+                // Add any new moments to the appearing set
+                for moment in trip.moments {
+                    if !appearingMoments.contains(moment.id) {
+                        appearingMoments.insert(moment.id)
+                    }
+                }
+            }
         }
         .overlay {
             if showingExpandedMoment, let moment = selectedMoment {
                 ExpandedMomentView(
                     moment: moment,
                     mediaItems: mediaItemsForMoment(moment),
-                    tripId: trip.id,
+                    tripId: tripId,
                     isPresented: $showingExpandedMoment
                 )
             }
@@ -104,45 +117,11 @@ struct TripCanvasView: View {
                     .font(.headline)
                     .foregroundStyle(.white)
 
-                VStack(spacing: 20) {
-                    // Width picker
-                    VStack(spacing: 8) {
-                        HStack {
-                            Text("Width")
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.8))
-                            Spacer()
-                        }
-
-                        Picker("Width", selection: $previewWidth) {
-                            Text("1 Column").tag(1.0)
-                            Text("2 Columns").tag(2.0)
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: previewWidth) { _, _ in
-                            updatePreviewSize(for: moment)
-                        }
-                    }
-
-                    // Height slider
-                    VStack(spacing: 8) {
-                        HStack {
-                            Text("Height")
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.8))
-                            Spacer()
-                            Text("\(previewHeight, specifier: "%.1f") rows")
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundStyle(.white)
-                        }
-
-                        Slider(value: $previewHeight, in: 1...4, step: 0.5)
-                            .tint(.blue)
-                            .onChange(of: previewHeight) { _, _ in
-                                updatePreviewSize(for: moment)
-                            }
-                    }
-                }
+                MomentSizePicker(
+                    width: $previewWidth,
+                    height: $previewHeight,
+                    onChange: { updatePreviewSize(for: moment) }
+                )
                 .padding()
                 .background(Color(.systemGray6))
                 .cornerRadius(12)
@@ -295,27 +274,25 @@ struct TripCanvasView: View {
         // Convert to grid position
         let newGridPosition = pixelToGridPosition(finalPosition, momentSize: moment.gridPosition)
 
-        // Update moment locally (optimistic)
-        if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == trip.id }),
+        // Update moment locally (optimistic) and reflow
+        var reflowedMoments: [Moment] = []
+        if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == tripId }),
            let momentIndex = tripStore.trips[tripIndex].moments.firstIndex(where: { $0.id == moment.id }) {
 
             // Update this moment's position
             tripStore.trips[tripIndex].moments[momentIndex].gridPosition = newGridPosition
 
             // Reflow all moments to pack from top
-            let reflowedMoments = GridLayoutCalculator.reflowMoments(tripStore.trips[tripIndex].moments)
+            reflowedMoments = GridLayoutCalculator.reflowMoments(tripStore.trips[tripIndex].moments)
             tripStore.trips[tripIndex].moments = reflowedMoments
         }
 
-        // Save to backend
+        // Save ALL reflowed moments to backend
         Task {
             do {
-                _ = try await ConvexClient.shared.updateMomentGridPosition(
-                    id: moment.id.uuidString,
-                    gridPosition: newGridPosition
-                )
+                _ = try await ConvexClient.shared.batchUpdateMomentGridPositions(moments: reflowedMoments)
             } catch {
-                print("❌ Failed to update moment position: \(error)")
+                print("❌ Failed to update moment positions: \(error)")
             }
         }
 
@@ -363,7 +340,7 @@ struct TripCanvasView: View {
 
     private func updatePreviewSize(for moment: Moment) {
         // Update moment size locally in real-time
-        if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == trip.id }),
+        if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == tripId }),
            let momentIndex = tripStore.trips[tripIndex].moments.firstIndex(where: { $0.id == moment.id }) {
 
             // Update this moment's size
@@ -383,21 +360,17 @@ struct TripCanvasView: View {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
 
-        // Save to backend
+        // Save ALL reflowed moments to backend
         Task {
             do {
-                // Get the final position after reflow
-                if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == trip.id }),
-                   let momentIndex = tripStore.trips[tripIndex].moments.firstIndex(where: { $0.id == moment.id }) {
-                    let updatedGridPosition = tripStore.trips[tripIndex].moments[momentIndex].gridPosition
+                // Get all reflowed moments
+                if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == tripId }) {
+                    let reflowedMoments = tripStore.trips[tripIndex].moments
 
-                    _ = try await ConvexClient.shared.updateMomentGridPosition(
-                        id: moment.id.uuidString,
-                        gridPosition: updatedGridPosition
-                    )
+                    _ = try await ConvexClient.shared.batchUpdateMomentGridPositions(moments: reflowedMoments)
                 }
             } catch {
-                print("❌ Failed to update moment size: \(error)")
+                print("❌ Failed to update moment sizes: \(error)")
             }
         }
 
@@ -440,6 +413,9 @@ struct TripCanvasView: View {
         ]
     )
 
-    TripCanvasView(trip: sampleTrip)
-        .environmentObject(TripStore())
+    let store = TripStore()
+    store.trips = [sampleTrip]
+
+    return TripCanvasView(tripId: sampleTrip.id)
+        .environmentObject(store)
 }

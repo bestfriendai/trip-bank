@@ -133,6 +133,12 @@ class TripStore: ObservableObject {
     // MARK: - Media Items
 
     func addMediaItems(to tripID: UUID, mediaItems: [MediaItem]) {
+        // Update local state immediately (optimistic update)
+        if let index = trips.firstIndex(where: { $0.id == tripID }) {
+            trips[index].mediaItems.append(contentsOf: mediaItems)
+        }
+
+        // Save to backend
         Task {
             do {
                 // Save each media item to backend
@@ -149,14 +155,15 @@ class TripStore: ObservableObject {
                         timestamp: mediaItem.timestamp
                     )
                 }
-
-                // Update local state
-                if let index = trips.firstIndex(where: { $0.id == tripID }) {
-                    trips[index].mediaItems.append(contentsOf: mediaItems)
-                }
             } catch {
                 errorMessage = "Failed to add media items: \(error.localizedDescription)"
                 print("Error adding media items: \(error)")
+
+                // Rollback on failure
+                if let index = trips.firstIndex(where: { $0.id == tripID }) {
+                    let mediaItemIDs = Set(mediaItems.map { $0.id })
+                    trips[index].mediaItems.removeAll { mediaItemIDs.contains($0.id) }
+                }
             }
         }
     }
@@ -164,9 +171,14 @@ class TripStore: ObservableObject {
     // MARK: - Moments
 
     func addMoment(to tripID: UUID, moment: Moment) {
+        // Update local state immediately (optimistic update)
+        if let index = trips.firstIndex(where: { $0.id == tripID }) {
+            trips[index].moments.append(moment)
+        }
+
+        // Save to backend
         Task {
             do {
-                // Save to backend
                 _ = try await convexClient.addMoment(
                     id: moment.id.uuidString,
                     tripId: tripID.uuidString,
@@ -181,14 +193,14 @@ class TripStore: ObservableObject {
                     importance: moment.importance.rawValue,
                     gridPosition: moment.gridPosition
                 )
-
-                // Update local state
-                if let index = trips.firstIndex(where: { $0.id == tripID }) {
-                    trips[index].moments.append(moment)
-                }
             } catch {
                 errorMessage = "Failed to add moment: \(error.localizedDescription)"
-                print("Error adding moment: \(error)")
+                print("❌ Failed to add moment: \(error)")
+
+                // Rollback on failure
+                if let index = trips.firstIndex(where: { $0.id == tripID }) {
+                    trips[index].moments.removeAll { $0.id == moment.id }
+                }
             }
         }
     }

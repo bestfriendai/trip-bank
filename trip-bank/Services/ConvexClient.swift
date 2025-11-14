@@ -410,6 +410,26 @@ class ConvexClient {
         ]
         return try await callMutation("trips:updateMomentGridPosition", args: args)
     }
+
+    func batchUpdateMomentGridPositions(moments: [Moment]) async throws -> DeleteResponse {
+        let updates = moments.map { moment in
+            return [
+                "momentId": moment.id.uuidString,
+                "gridPosition": [
+                    "column": moment.gridPosition.column,
+                    "row": moment.gridPosition.row,
+                    "width": moment.gridPosition.width,
+                    "height": moment.gridPosition.height
+                ]
+            ] as [String: Any]
+        }
+
+        let args: [String: Any] = [
+            "updates": updates
+        ]
+
+        return try await callMutation("trips:batchUpdateMomentGridPositions", args: args)
+    }
 }
 
 // MARK: - Response Types

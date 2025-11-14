@@ -505,3 +505,49 @@ export const updateMomentGridPosition = mutation({
     return { success: true };
   },
 });
+
+// Batch update moment grid positions (for reflow operations)
+export const batchUpdateMomentGridPositions = mutation({
+  args: {
+    updates: v.array(
+      v.object({
+        momentId: v.string(),
+        gridPosition: v.object({
+          column: v.number(),
+          row: v.number(),
+          width: v.number(),
+          height: v.number(),
+        }),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+    const now = Date.now();
+
+    // Update all moments in batch
+    for (const update of args.updates) {
+      // Find the moment
+      const moment = await ctx.db
+        .query("moments")
+        .withIndex("by_momentId", (q) => q.eq("momentId", update.momentId))
+        .first();
+
+      if (!moment) {
+        throw new Error(`Moment not found: ${update.momentId}`);
+      }
+
+      // Verify ownership
+      if (moment.userId !== userId) {
+        throw new Error("Unauthorized: You don't own this moment");
+      }
+
+      await ctx.db.patch(moment._id, {
+        gridPosition: update.gridPosition,
+        updatedAt: now,
+      });
+    }
+
+    return { success: true };
+  },
+});

@@ -13,7 +13,8 @@ struct CreateMomentView: View {
     @State private var placeName = ""
     @State private var eventName = ""
     @State private var date = Date()
-    @State private var importance: MomentImportance = .medium
+    @State private var momentWidth: Double = 1
+    @State private var momentHeight: Double = 1.5
     @State private var selectedMediaItems: Set<UUID> = []
 
     private var isEditing: Bool {
@@ -35,14 +36,15 @@ struct CreateMomentView: View {
                         .frame(minHeight: 100)
                 }
 
-                Section("Importance") {
-                    Picker("How important is this moment?", selection: $importance) {
-                        Text("Small detail").tag(MomentImportance.small)
-                        Text("Regular moment").tag(MomentImportance.medium)
-                        Text("Highlight").tag(MomentImportance.large)
-                        Text("Hero moment").tag(MomentImportance.hero)
-                    }
-                    .pickerStyle(.segmented)
+                Section {
+                    MomentSizePicker(width: $momentWidth, height: $momentHeight)
+                        .padding(.vertical, 8)
+                } header: {
+                    Text("Size")
+                } footer: {
+                    Text("You can resize this later by double-tapping the moment")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Photos & Videos") {
@@ -79,7 +81,8 @@ struct CreateMomentView: View {
                     placeName = moment.placeName ?? ""
                     eventName = moment.eventName ?? ""
                     date = moment.date ?? Date()
-                    importance = moment.importance
+                    momentWidth = Double(moment.gridPosition.width)
+                    momentHeight = moment.gridPosition.height
                     selectedMediaItems = Set(moment.mediaItemIDs)
                 }
             }
@@ -104,8 +107,13 @@ struct CreateMomentView: View {
     }
 
     private func createMoment() {
-        // Calculate grid position for new moment
-        let desiredSize = GridLayoutCalculator.gridSizeFromImportance(importance)
+        // Calculate grid position for new moment using selected size
+        let desiredSize = GridPosition(
+            column: 0,
+            row: 0,
+            width: Int(momentWidth),
+            height: momentHeight
+        )
         let gridPosition = GridLayoutCalculator.calculateNextGridPosition(
             existingMoments: trip.moments,
             momentSize: desiredSize
@@ -118,7 +126,7 @@ struct CreateMomentView: View {
             date: date,
             placeName: placeName.isEmpty ? nil : placeName,
             eventName: eventName.isEmpty ? nil : eventName,
-            importance: importance,
+            importance: .medium, // Default importance for backend
             gridPosition: gridPosition
         )
 
@@ -136,7 +144,11 @@ struct CreateMomentView: View {
         updatedMoment.date = date
         updatedMoment.placeName = placeName.isEmpty ? nil : placeName
         updatedMoment.eventName = eventName.isEmpty ? nil : eventName
-        updatedMoment.importance = importance
+        updatedMoment.importance = .medium
+
+        // Update grid position size
+        updatedMoment.gridPosition.width = Int(momentWidth)
+        updatedMoment.gridPosition.height = momentHeight
 
         tripStore.updateMoment(in: trip.id, moment: updatedMoment)
         dismiss()
