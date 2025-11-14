@@ -449,7 +449,6 @@ struct TripCanvasView: View {
                 note: "Incredible city views",
                 mediaItemIDs: [],
                 placeName: "Tokyo Tower",
-                importance: .hero,
                 gridPosition: GridPosition(column: 0, row: 0, width: 2, height: 2.0)
             ),
             Moment(
@@ -457,7 +456,6 @@ struct TripCanvasView: View {
                 note: "Best meal of the trip",
                 mediaItemIDs: [],
                 placeName: "Shibuya",
-                importance: .medium,
                 gridPosition: GridPosition(column: 0, row: 2.0, width: 1, height: 1.5)
             ),
             Moment(
@@ -465,7 +463,6 @@ struct TripCanvasView: View {
                 note: "Peaceful and beautiful",
                 mediaItemIDs: [],
                 placeName: "Senso-ji",
-                importance: .large,
                 gridPosition: GridPosition(column: 1, row: 2.0, width: 1, height: 2.0)
             )
         ]

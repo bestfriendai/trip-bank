@@ -190,7 +190,6 @@ class TripStore: ObservableObject {
                     placeName: moment.placeName,
                     eventName: moment.eventName,
                     voiceNoteURL: moment.voiceNoteURL,
-                    importance: moment.importance.rawValue,
                     gridPosition: moment.gridPosition
                 )
             } catch {
@@ -216,8 +215,7 @@ class TripStore: ObservableObject {
                     mediaItemIDs: moment.mediaItemIDs.map { $0.uuidString },
                     date: moment.date,
                     placeName: moment.placeName,
-                    eventName: moment.eventName,
-                    importance: moment.importance.rawValue
+                    eventName: moment.eventName
                 )
 
                 // Update local state
@@ -337,7 +335,6 @@ class TripStore: ObservableObject {
                 mediaItemIDs: [media3.id],
                 date: Calendar.current.date(byAdding: .day, value: -13, to: Date()),
                 placeName: "Belém Tower",
-                importance: .hero,
                 gridPosition: GridPosition(column: 0, row: 0, width: 2, height: 2.0)
             ),
             Moment(
@@ -346,7 +343,6 @@ class TripStore: ObservableObject {
                 mediaItemIDs: [media1.id, media2.id],
                 date: Calendar.current.date(byAdding: .day, value: -14, to: Date()),
                 placeName: "Lisbon Airport",
-                importance: .medium,
                 gridPosition: GridPosition(column: 0, row: 2.0, width: 1, height: 1.5)
             ),
             Moment(
@@ -355,7 +351,6 @@ class TripStore: ObservableObject {
                 mediaItemIDs: [media4.id],
                 date: Calendar.current.date(byAdding: .day, value: -13, to: Date()),
                 placeName: "Pastéis de Belém",
-                importance: .small,
                 gridPosition: GridPosition(column: 1, row: 2.0, width: 1, height: 1.0)
             ),
             Moment(
@@ -364,7 +359,6 @@ class TripStore: ObservableObject {
                 mediaItemIDs: [media5.id, media6.id],
                 date: Calendar.current.date(byAdding: .day, value: -12, to: Date()),
                 placeName: "Alfama District",
-                importance: .medium,
                 gridPosition: GridPosition(column: 0, row: 3.5, width: 1, height: 1.5)
             ),
             Moment(
@@ -374,7 +368,6 @@ class TripStore: ObservableObject {
                 date: Calendar.current.date(byAdding: .day, value: -11, to: Date()),
                 placeName: "Bairro Alto",
                 eventName: "Fado Performance",
-                importance: .large,
                 gridPosition: GridPosition(column: 1, row: 3.0, width: 1, height: 2.0)
             ),
             Moment(
@@ -383,7 +376,6 @@ class TripStore: ObservableObject {
                 mediaItemIDs: [media8.id],
                 date: Calendar.current.date(byAdding: .day, value: -10, to: Date()),
                 placeName: "Cascais Beach",
-                importance: .large,
                 gridPosition: GridPosition(column: 0, row: 5.0, width: 1, height: 2.0)
             )
         ]

@@ -185,12 +185,6 @@ export const addMoment = mutation({
     placeName: v.optional(v.string()),
     eventName: v.optional(v.string()),
     voiceNoteURL: v.optional(v.string()),
-    importance: v.union(
-      v.literal("small"),
-      v.literal("medium"),
-      v.literal("large"),
-      v.literal("hero")
-    ),
     gridPosition: v.object({
       column: v.number(),
       row: v.number(),
@@ -215,7 +209,6 @@ export const addMoment = mutation({
       placeName: args.placeName,
       eventName: args.eventName,
       voiceNoteURL: args.voiceNoteURL,
-      importance: args.importance,
       gridPosition: args.gridPosition,
       createdAt: now,
       updatedAt: now,
@@ -424,14 +417,6 @@ export const updateMoment = mutation({
     date: v.optional(v.number()),
     placeName: v.optional(v.string()),
     eventName: v.optional(v.string()),
-    importance: v.optional(
-      v.union(
-        v.literal("small"),
-        v.literal("medium"),
-        v.literal("large"),
-        v.literal("hero")
-      )
-    ),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -461,7 +446,6 @@ export const updateMoment = mutation({
     if (args.date !== undefined) updates.date = args.date;
     if (args.placeName !== undefined) updates.placeName = args.placeName;
     if (args.eventName !== undefined) updates.eventName = args.eventName;
-    if (args.importance !== undefined) updates.importance = args.importance;
 
     await ctx.db.patch(moment._id, updates);
     return { success: true };

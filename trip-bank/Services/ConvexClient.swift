@@ -326,14 +326,13 @@ class ConvexClient {
 
     // MARK: - Moment Mutations
 
-    func addMoment(id: String, tripId: String, title: String, note: String? = nil, mediaItemIDs: [String], timestamp: Date, date: Date? = nil, placeName: String? = nil, eventName: String? = nil, voiceNoteURL: String? = nil, importance: String, gridPosition: GridPosition) async throws -> String {
+    func addMoment(id: String, tripId: String, title: String, note: String? = nil, mediaItemIDs: [String], timestamp: Date, date: Date? = nil, placeName: String? = nil, eventName: String? = nil, voiceNoteURL: String? = nil, gridPosition: GridPosition) async throws -> String {
         var args: [String: Any] = [
             "momentId": id,
             "tripId": tripId,
             "title": title,
             "mediaItemIDs": mediaItemIDs,
             "timestamp": timestamp.timeIntervalSince1970 * 1000,
-            "importance": importance,
             "gridPosition": [
                 "column": gridPosition.column,
                 "row": gridPosition.row,
@@ -361,7 +360,7 @@ class ConvexClient {
         return try await callMutation("trips:addMoment", args: args)
     }
 
-    func updateMoment(id: String, title: String? = nil, note: String? = nil, mediaItemIDs: [String]? = nil, date: Date? = nil, placeName: String? = nil, eventName: String? = nil, importance: String? = nil) async throws -> DeleteResponse {
+    func updateMoment(id: String, title: String? = nil, note: String? = nil, mediaItemIDs: [String]? = nil, date: Date? = nil, placeName: String? = nil, eventName: String? = nil) async throws -> DeleteResponse {
         var args: [String: Any] = [
             "momentId": id
         ]
@@ -383,9 +382,6 @@ class ConvexClient {
         }
         if let eventName = eventName {
             args["eventName"] = eventName
-        }
-        if let importance = importance {
-            args["importance"] = importance
         }
 
         return try await callMutation("trips:updateMoment", args: args)
@@ -518,7 +514,6 @@ struct ConvexMoment: Decodable {
     let placeName: String?
     let eventName: String?
     let voiceNoteURL: String?
-    let importance: String
     let gridPosition: GridPositionDTO
     let createdAt: Double
     let updatedAt: Double
@@ -606,7 +601,6 @@ extension ConvexMoment {
             width: Int(gridPosition.width),
             height: gridPosition.height
         )
-        let imp = MomentImportance(rawValue: importance) ?? .medium
 
         return Moment(
             id: UUID(uuidString: momentId) ?? UUID(),
@@ -618,7 +612,6 @@ extension ConvexMoment {
             placeName: placeName,
             eventName: eventName,
             voiceNoteURL: voiceNoteURL,
-            importance: imp,
             gridPosition: gridPos
         )
     }

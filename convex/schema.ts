@@ -67,12 +67,6 @@ export default defineSchema({
     voiceNoteURL: v.optional(v.string()),
 
     // Visual layout properties
-    importance: v.union(
-      v.literal("small"),
-      v.literal("medium"),
-      v.literal("large"),
-      v.literal("hero")
-    ),
     gridPosition: v.object({
       column: v.number(), // 0 = left, 1 = right
       row: v.number(), // 0, 0.5, 1, 1.5, 2, 2.5, 3, etc.

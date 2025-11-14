@@ -86,20 +86,6 @@ struct GridLayoutCalculator {
         }
     }
 
-    // Map importance to default grid size
-    static func gridSizeFromImportance(_ importance: MomentImportance) -> GridPosition {
-        switch importance {
-        case .small:
-            return GridPosition(column: 0, row: 0, width: 1, height: 1.0)
-        case .medium:
-            return GridPosition(column: 0, row: 0, width: 1, height: 1.5)
-        case .large:
-            return GridPosition(column: 0, row: 0, width: 1, height: 2.0)
-        case .hero:
-            return GridPosition(column: 0, row: 0, width: 2, height: 2.0)
-        }
-    }
-
     // Reflow all moments to pack from top (used after drag/resize)
     // If pinnedMomentId is provided, that moment keeps its exact position and others reflow around it
     static func reflowMoments(_ moments: [Moment], pinnedMomentId: UUID? = nil) -> [Moment] {

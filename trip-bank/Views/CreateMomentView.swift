@@ -126,7 +126,6 @@ struct CreateMomentView: View {
             date: date,
             placeName: placeName.isEmpty ? nil : placeName,
             eventName: eventName.isEmpty ? nil : eventName,
-            importance: .medium, // Default importance for backend
             gridPosition: gridPosition
         )
 
@@ -144,7 +143,6 @@ struct CreateMomentView: View {
         updatedMoment.date = date
         updatedMoment.placeName = placeName.isEmpty ? nil : placeName
         updatedMoment.eventName = eventName.isEmpty ? nil : eventName
-        updatedMoment.importance = .medium
 
         // Update grid position size
         updatedMoment.gridPosition.width = Int(momentWidth)

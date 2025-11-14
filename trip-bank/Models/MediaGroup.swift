@@ -16,7 +16,6 @@ struct Moment: Identifiable, Codable {
     var voiceNoteURL: String? // Path to audio file (future feature)
 
     // Visual layout properties for spatial canvas
-    var importance: MomentImportance // Determines initial size on canvas
     var gridPosition: GridPosition // Position and size in grid
 
     init(id: UUID = UUID(),
@@ -28,7 +27,6 @@ struct Moment: Identifiable, Codable {
          placeName: String? = nil,
          eventName: String? = nil,
          voiceNoteURL: String? = nil,
-         importance: MomentImportance = .medium,
          gridPosition: GridPosition) {
         self.id = id
         self.title = title
@@ -39,7 +37,6 @@ struct Moment: Identifiable, Codable {
         self.placeName = placeName
         self.eventName = eventName
         self.voiceNoteURL = voiceNoteURL
-        self.importance = importance
         self.gridPosition = gridPosition
     }
 }
@@ -50,12 +47,4 @@ struct GridPosition: Codable, Equatable {
     var row: Double // 0, 0.5, 1, 1.5, 2, 2.5, 3, etc.
     var width: Int // 1 or 2 (columns)
     var height: Double // 1, 1.5, 2, 2.5, 3, etc. (rows)
-}
-
-// Importance level affects initial grid size
-enum MomentImportance: String, Codable {
-    case small // Minor moments - 1x1
-    case medium // Regular moments - 1x1.5
-    case large // Important highlights - 1x2 or 2x1.5
-    case hero // Key moments - 2x2
 }
