@@ -70,12 +70,20 @@ struct MediaImageView: View {
 
         do {
             let urlString = try await ConvexClient.shared.getFileUrl(storageId: storageId)
+
+            // Check if task was cancelled
+            try Task.checkCancellation()
+
             if let url = URL(string: urlString) {
                 imageURL = url
             } else {
                 loadFailed = true
             }
+        } catch is CancellationError {
+            // Task was cancelled (user navigated away), this is normal - don't log error
+            return
         } catch {
+            // Only log non-cancellation errors
             print("❌ Failed to load image URL from Convex: \(error)")
             loadFailed = true
         }

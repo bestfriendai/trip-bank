@@ -1,22 +1,31 @@
 import SwiftUI
 
-// Main spatial canvas view for displaying trip moments
+// Main grid-based canvas view for displaying trip moments
 struct TripCanvasView: View {
     let trip: Trip
+    @EnvironmentObject var tripStore: TripStore
     @State private var selectedMoment: Moment?
     @State private var showingExpandedMoment = false
     @State private var canvasSize: CGSize = .zero
     @State private var appearingMoments: Set<UUID> = []
 
+    // Drag state
+    @State private var draggingMoment: UUID?
+    @State private var dragOffset: CGSize = .zero
+    @State private var dragStartPosition: CGPoint = .zero
+
+    // Resize state
+    @State private var showingResizePicker = false
+    @State private var resizingMoment: Moment?
+    @State private var previewWidth: Double = 1
+    @State private var previewHeight: Double = 1.5
+
     private var momentLayouts: [UUID: MomentLayout] {
-        SpatialCanvasLayout.calculateLayout(
-            for: trip.moments,
-            canvasWidth: canvasSize.width
-        )
+        GridLayoutCalculator.calculateLayout(for: trip.moments, canvasWidth: canvasSize.width)
     }
 
     private var sortedMoments: [Moment] {
-        trip.moments.sorted { ($0.date ?? $0.timestamp) < ($1.date ?? $1.timestamp) }
+        trip.moments.sorted { $0.gridPosition.row < $1.gridPosition.row }
     }
 
     var body: some View {
@@ -25,35 +34,15 @@ struct TripCanvasView: View {
                 ZStack(alignment: .topLeading) {
                     // Only render if canvas has valid size
                     if canvasSize.width > 0 && canvasSize.height > 0 {
-                        // Chronological flow paths
-                        chronologicalPaths
+                        // Grid overlay (debug - can remove later)
+                        gridOverlay
 
-                        // Moments on canvas with staggered entrance animations
+                        // Moments on canvas
                         ForEach(Array(trip.moments.enumerated()), id: \.element.id) { index, moment in
                             if let layout = momentLayouts[moment.id],
                                layout.size.width > 0,
                                layout.size.height > 0 {
-                                MomentCardView(
-                                    moment: moment,
-                                    mediaItems: mediaItemsForMoment(moment),
-                                    size: layout.size,
-                                    onTap: {
-                                        selectedMoment = moment
-                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                            showingExpandedMoment = true
-                                        }
-                                    }
-                                )
-                                .position(x: layout.position.x + layout.size.width / 2,
-                                         y: layout.position.y + layout.size.height / 2)
-                                .zIndex(Double(layout.zIndex))
-                                .scaleEffect(appearingMoments.contains(moment.id) ? 1.0 : 0.3)
-                                .opacity(appearingMoments.contains(moment.id) ? 1.0 : 0.0)
-                                .animation(
-                                    .spring(response: 0.6, dampingFraction: 0.75)
-                                        .delay(Double(index) * 0.1),
-                                    value: appearingMoments
-                                )
+                                momentCardView(for: moment, at: index, with: layout)
                             }
                         }
                     }
@@ -91,62 +80,123 @@ struct TripCanvasView: View {
                 )
             }
         }
-    }
-
-    // Draw paths connecting moments chronologically
-    @ViewBuilder
-    private var chronologicalPaths: some View {
-        Canvas { context, size in
-            guard sortedMoments.count > 1 else { return }
-
-            var path = Path()
-
-            for i in 0..<(sortedMoments.count - 1) {
-                let currentMoment = sortedMoments[i]
-                let nextMoment = sortedMoments[i + 1]
-
-                guard let currentLayout = momentLayouts[currentMoment.id],
-                      let nextLayout = momentLayouts[nextMoment.id] else {
-                    continue
-                }
-
-                // Calculate center points
-                let currentCenter = CGPoint(
-                    x: currentLayout.position.x + currentLayout.size.width / 2,
-                    y: currentLayout.position.y + currentLayout.size.height / 2
-                )
-                let nextCenter = CGPoint(
-                    x: nextLayout.position.x + nextLayout.size.width / 2,
-                    y: nextLayout.position.y + nextLayout.size.height / 2
-                )
-
-                // Draw curved path
-                path.move(to: currentCenter)
-
-                let controlPoint1 = CGPoint(
-                    x: currentCenter.x + (nextCenter.x - currentCenter.x) * 0.3,
-                    y: currentCenter.y
-                )
-                let controlPoint2 = CGPoint(
-                    x: currentCenter.x + (nextCenter.x - currentCenter.x) * 0.7,
-                    y: nextCenter.y
-                )
-
-                path.addCurve(to: nextCenter, control1: controlPoint1, control2: controlPoint2)
+        .overlay {
+            if showingResizePicker, let moment = resizingMoment {
+                resizePickerOverlay(for: moment)
             }
-
-            // Draw the path
-            context.stroke(
-                path,
-                with: .color(.white.opacity(0.15)),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [8, 4])
-            )
         }
     }
 
-    private var canvasContentWidth: CGFloat {
-        let maxX = momentLayouts.values.map { $0.position.x + $0.size.width }.max() ?? 0
-        return maxX + 40 // Add right padding
+    // MARK: - Resize Picker Overlay
+
+    @ViewBuilder
+    private func resizePickerOverlay(for moment: Moment) -> some View {
+        ZStack {
+            // Dark background
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    finishResizing(moment)
+                }
+
+            VStack(spacing: 30) {
+                Text("Resize '\(moment.title)'")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+
+                VStack(spacing: 20) {
+                    // Width picker
+                    VStack(spacing: 8) {
+                        HStack {
+                            Text("Width")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.8))
+                            Spacer()
+                        }
+
+                        Picker("Width", selection: $previewWidth) {
+                            Text("1 Column").tag(1.0)
+                            Text("2 Columns").tag(2.0)
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: previewWidth) { _, _ in
+                            updatePreviewSize(for: moment)
+                        }
+                    }
+
+                    // Height slider
+                    VStack(spacing: 8) {
+                        HStack {
+                            Text("Height")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.8))
+                            Spacer()
+                            Text("\(previewHeight, specifier: "%.1f") rows")
+                                .font(.subheadline.monospacedDigit())
+                                .foregroundStyle(.white)
+                        }
+
+                        Slider(value: $previewHeight, in: 1...4, step: 0.5)
+                            .tint(.blue)
+                            .onChange(of: previewHeight) { _, _ in
+                                updatePreviewSize(for: moment)
+                            }
+                    }
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+
+                // Done button
+                Button(action: {
+                    finishResizing(moment)
+                }) {
+                    Text("Done")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .cornerRadius(12)
+                }
+            }
+            .padding(30)
+        }
+    }
+
+    // MARK: - Grid Overlay (for debugging)
+
+    @ViewBuilder
+    private var gridOverlay: some View {
+        Canvas { context, size in
+            let columnWidth = (canvasSize.width - (GridLayoutCalculator.sideMargin * 2) - GridLayoutCalculator.columnSpacing) / CGFloat(GridLayoutCalculator.numberOfColumns)
+
+            // Draw column divider
+            let dividerX = GridLayoutCalculator.sideMargin + columnWidth + (GridLayoutCalculator.columnSpacing / 2)
+            var path = Path()
+            path.move(to: CGPoint(x: dividerX, y: 0))
+            path.addLine(to: CGPoint(x: dividerX, y: canvasContentHeight))
+
+            context.stroke(
+                path,
+                with: .color(.white.opacity(0.1)),
+                style: StrokeStyle(lineWidth: 1, dash: [4, 4])
+            )
+
+            // Draw row lines every 0.5 rows
+            for rowIndex in stride(from: 0, to: 20, by: 0.5) {
+                let y = CGFloat(rowIndex) * (GridLayoutCalculator.rowHeight + GridLayoutCalculator.rowSpacing)
+                var rowPath = Path()
+                rowPath.move(to: CGPoint(x: 0, y: y))
+                rowPath.addLine(to: CGPoint(x: canvasSize.width, y: y))
+
+                context.stroke(
+                    rowPath,
+                    with: .color(.white.opacity(0.05)),
+                    style: StrokeStyle(lineWidth: 1, dash: [2, 2])
+                )
+            }
+        }
     }
 
     private var canvasContentHeight: CGFloat {
@@ -156,6 +206,204 @@ struct TripCanvasView: View {
 
     private func mediaItemsForMoment(_ moment: Moment) -> [MediaItem] {
         trip.mediaItems.filter { moment.mediaItemIDs.contains($0.id) }
+    }
+
+    // MARK: - Moment Card View
+
+    @ViewBuilder
+    private func momentCardView(for moment: Moment, at index: Int, with layout: MomentLayout) -> some View {
+        let isDragging = draggingMoment == moment.id
+        let isOtherBeingDragged = draggingMoment != nil && draggingMoment != moment.id
+
+        MomentCardView(
+            moment: moment,
+            mediaItems: mediaItemsForMoment(moment),
+            size: layout.size,
+            onTap: {
+                guard draggingMoment == nil else { return }
+                selectedMoment = moment
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    showingExpandedMoment = true
+                }
+            }
+        )
+        .position(
+            x: layout.position.x + layout.size.width / 2,
+            y: layout.position.y + layout.size.height / 2
+        )
+        .offset(isDragging ? dragOffset : .zero)
+        .scaleEffect(isDragging ? 1.03 : 1.0)
+        .opacity(isOtherBeingDragged ? 0.3 : (appearingMoments.contains(moment.id) ? 1.0 : 0.0))
+        .shadow(
+            color: .black.opacity(isDragging ? 0.4 : 0),
+            radius: isDragging ? 20 : 0,
+            x: 0,
+            y: isDragging ? 10 : 0
+        )
+        .zIndex(isDragging ? 1000 : Double(layout.zIndex))
+        .animation(
+            isDragging ? nil : .spring(response: 0.6, dampingFraction: 0.75).delay(Double(index) * 0.1),
+            value: appearingMoments
+        )
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5)
+                .onEnded { _ in
+                    startDragging(moment, at: layout.position)
+                }
+        )
+        .simultaneousGesture(
+            DragGesture()
+                .onChanged { value in
+                    guard draggingMoment == moment.id else { return }
+                    dragOffset = value.translation
+                }
+                .onEnded { value in
+                    guard draggingMoment == moment.id else { return }
+                    handleDragEnd(value, for: moment)
+                }
+        )
+        .onTapGesture(count: 2) {
+            // Double-tap to resize
+            resizingMoment = moment
+            previewWidth = Double(moment.gridPosition.width)
+            previewHeight = moment.gridPosition.height
+            showingResizePicker = true
+        }
+    }
+
+    // MARK: - Drag Handlers
+
+    private func startDragging(_ moment: Moment, at position: CGPoint) {
+        // Haptic feedback
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            draggingMoment = moment.id
+            dragOffset = .zero
+            dragStartPosition = position
+        }
+    }
+
+    private func handleDragEnd(_ value: DragGesture.Value, for moment: Moment) {
+        // Calculate final position after drag
+        let finalPosition = CGPoint(
+            x: dragStartPosition.x + value.translation.width,
+            y: dragStartPosition.y + value.translation.height
+        )
+
+        // Convert to grid position
+        let newGridPosition = pixelToGridPosition(finalPosition, momentSize: moment.gridPosition)
+
+        // Update moment locally (optimistic)
+        if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == trip.id }),
+           let momentIndex = tripStore.trips[tripIndex].moments.firstIndex(where: { $0.id == moment.id }) {
+
+            // Update this moment's position
+            tripStore.trips[tripIndex].moments[momentIndex].gridPosition = newGridPosition
+
+            // Reflow all moments to pack from top
+            let reflowedMoments = GridLayoutCalculator.reflowMoments(tripStore.trips[tripIndex].moments)
+            tripStore.trips[tripIndex].moments = reflowedMoments
+        }
+
+        // Save to backend
+        Task {
+            do {
+                _ = try await ConvexClient.shared.updateMomentGridPosition(
+                    id: moment.id.uuidString,
+                    gridPosition: newGridPosition
+                )
+            } catch {
+                print("❌ Failed to update moment position: \(error)")
+            }
+        }
+
+        // Reset drag state
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            draggingMoment = nil
+            dragOffset = .zero
+        }
+
+        // Haptic feedback for drop
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+    }
+
+    // MARK: - Grid Conversion
+
+    private func pixelToGridPosition(_ pixel: CGPoint, momentSize: GridPosition) -> GridPosition {
+        // Determine column (0 or 1)
+        let columnWidth = (canvasSize.width - (GridLayoutCalculator.sideMargin * 2) - GridLayoutCalculator.columnSpacing) / CGFloat(GridLayoutCalculator.numberOfColumns)
+        let midPoint = canvasSize.width / 2
+
+        let column: Int
+        if momentSize.width == 2 {
+            // Full width always column 0
+            column = 0
+        } else {
+            // Snap to nearest column
+            column = pixel.x < midPoint ? 0 : 1
+        }
+
+        // Determine row (snap to 0.5 increments)
+        let rawRow = pixel.y / (GridLayoutCalculator.rowHeight + GridLayoutCalculator.rowSpacing)
+        let snappedRow = (rawRow * 2).rounded() / 2 // Snap to 0.5 increments
+        let row = max(0, snappedRow)
+
+        return GridPosition(
+            column: column,
+            row: row,
+            width: momentSize.width,
+            height: momentSize.height
+        )
+    }
+
+    // MARK: - Resize Handlers
+
+    private func updatePreviewSize(for moment: Moment) {
+        // Update moment size locally in real-time
+        if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == trip.id }),
+           let momentIndex = tripStore.trips[tripIndex].moments.firstIndex(where: { $0.id == moment.id }) {
+
+            // Update this moment's size
+            var updatedPosition = tripStore.trips[tripIndex].moments[momentIndex].gridPosition
+            updatedPosition.width = Int(previewWidth)
+            updatedPosition.height = previewHeight
+            tripStore.trips[tripIndex].moments[momentIndex].gridPosition = updatedPosition
+
+            // Reflow all moments to pack from top
+            let reflowedMoments = GridLayoutCalculator.reflowMoments(tripStore.trips[tripIndex].moments)
+            tripStore.trips[tripIndex].moments = reflowedMoments
+        }
+    }
+
+    private func finishResizing(_ moment: Moment) {
+        // Haptic feedback
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+
+        // Save to backend
+        Task {
+            do {
+                // Get the final position after reflow
+                if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == trip.id }),
+                   let momentIndex = tripStore.trips[tripIndex].moments.firstIndex(where: { $0.id == moment.id }) {
+                    let updatedGridPosition = tripStore.trips[tripIndex].moments[momentIndex].gridPosition
+
+                    _ = try await ConvexClient.shared.updateMomentGridPosition(
+                        id: moment.id.uuidString,
+                        gridPosition: updatedGridPosition
+                    )
+                }
+            } catch {
+                print("❌ Failed to update moment size: \(error)")
+            }
+        }
+
+        // Close picker
+        showingResizePicker = false
+        resizingMoment = nil
     }
 }
 
@@ -170,24 +418,28 @@ struct TripCanvasView: View {
                 note: "Incredible city views",
                 mediaItemIDs: [],
                 placeName: "Tokyo Tower",
-                importance: .hero
+                importance: .hero,
+                gridPosition: GridPosition(column: 0, row: 0, width: 2, height: 2.0)
             ),
             Moment(
                 title: "Ramen in Shibuya",
                 note: "Best meal of the trip",
                 mediaItemIDs: [],
                 placeName: "Shibuya",
-                importance: .medium
+                importance: .medium,
+                gridPosition: GridPosition(column: 0, row: 2.0, width: 1, height: 1.5)
             ),
             Moment(
                 title: "Temple Visit",
                 note: "Peaceful and beautiful",
                 mediaItemIDs: [],
                 placeName: "Senso-ji",
-                importance: .large
+                importance: .large,
+                gridPosition: GridPosition(column: 1, row: 2.0, width: 1, height: 2.0)
             )
         ]
     )
 
     TripCanvasView(trip: sampleTrip)
+        .environmentObject(TripStore())
 }

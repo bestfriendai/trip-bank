@@ -2,12 +2,28 @@ import Foundation
 import UIKit
 import Clerk
 
+// Actor for thread-safe URL caching
+actor URLCache {
+    private var cache: [String: String] = [:]
+
+    func get(_ key: String) -> String? {
+        return cache[key]
+    }
+
+    func set(_ key: String, value: String) {
+        cache[key] = value
+    }
+}
+
 class ConvexClient {
     static let shared = ConvexClient()
 
     // Your Convex deployment URL
     private let baseURL = "https://flippant-mongoose-94.convex.cloud"
     private let authTokenKey = "convex_auth_token"
+
+    // URL cache to avoid repeated fetches
+    private let urlCache = URLCache()
 
     private init() {}
 
@@ -200,12 +216,23 @@ class ConvexClient {
         return uploadResponse.storageId
     }
 
-    /// Get download URL for a stored file
+    /// Get download URL for a stored file (with caching)
     func getFileUrl(storageId: String) async throws -> String {
+        // Check cache first
+        if let cachedUrl = await urlCache.get(storageId) {
+            return cachedUrl
+        }
+
+        // Fetch from Convex
         let args: [String: Any] = [
             "storageId": storageId
         ]
-        return try await callQuery("files:getFileUrl", args: args)
+        let url: String = try await callQuery("files:getFileUrl", args: args)
+
+        // Cache the result
+        await urlCache.set(storageId, value: url)
+
+        return url
     }
 
     /// Compress image to reasonable size for storage
@@ -299,14 +326,20 @@ class ConvexClient {
 
     // MARK: - Moment Mutations
 
-    func addMoment(id: String, tripId: String, title: String, note: String? = nil, mediaItemIDs: [String], timestamp: Date, date: Date? = nil, placeName: String? = nil, eventName: String? = nil, voiceNoteURL: String? = nil, importance: String, layoutPosition: CGPoint? = nil, layoutSize: String? = nil) async throws -> String {
+    func addMoment(id: String, tripId: String, title: String, note: String? = nil, mediaItemIDs: [String], timestamp: Date, date: Date? = nil, placeName: String? = nil, eventName: String? = nil, voiceNoteURL: String? = nil, importance: String, gridPosition: GridPosition) async throws -> String {
         var args: [String: Any] = [
             "momentId": id,
             "tripId": tripId,
             "title": title,
             "mediaItemIDs": mediaItemIDs,
             "timestamp": timestamp.timeIntervalSince1970 * 1000,
-            "importance": importance
+            "importance": importance,
+            "gridPosition": [
+                "column": gridPosition.column,
+                "row": gridPosition.row,
+                "width": gridPosition.width,
+                "height": gridPosition.height
+            ]
         ]
 
         if let note = note {
@@ -323,15 +356,6 @@ class ConvexClient {
         }
         if let voiceNoteURL = voiceNoteURL {
             args["voiceNoteURL"] = voiceNoteURL
-        }
-        if let layoutPosition = layoutPosition {
-            args["layoutPosition"] = [
-                "x": layoutPosition.x,
-                "y": layoutPosition.y
-            ]
-        }
-        if let layoutSize = layoutSize {
-            args["layoutSize"] = layoutSize
         }
 
         return try await callMutation("trips:addMoment", args: args)
@@ -372,6 +396,19 @@ class ConvexClient {
             "momentId": id
         ]
         return try await callMutation("trips:deleteMoment", args: args)
+    }
+
+    func updateMomentGridPosition(id: String, gridPosition: GridPosition) async throws -> DeleteResponse {
+        let args: [String: Any] = [
+            "momentId": id,
+            "gridPosition": [
+                "column": gridPosition.column,
+                "row": gridPosition.row,
+                "width": gridPosition.width,
+                "height": gridPosition.height
+            ]
+        ]
+        return try await callMutation("trips:updateMomentGridPosition", args: args)
     }
 }
 
@@ -462,14 +499,15 @@ struct ConvexMoment: Decodable {
     let eventName: String?
     let voiceNoteURL: String?
     let importance: String
-    let layoutPosition: LayoutPosition?
-    let layoutSize: String?
+    let gridPosition: GridPositionDTO
     let createdAt: Double
     let updatedAt: Double
 
-    struct LayoutPosition: Decodable {
-        let x: Double
-        let y: Double
+    struct GridPositionDTO: Decodable {
+        let column: Double
+        let row: Double
+        let width: Double
+        let height: Double
     }
 }
 
@@ -542,8 +580,12 @@ extension ConvexMediaItem {
 
 extension ConvexMoment {
     func toMoment() -> Moment {
-        let pos: CGPoint? = layoutPosition.map { CGPoint(x: $0.x, y: $0.y) }
-        let size: MomentSize? = layoutSize.flatMap { MomentSize(rawValue: $0) }
+        let gridPos = GridPosition(
+            column: Int(gridPosition.column),
+            row: gridPosition.row,
+            width: Int(gridPosition.width),
+            height: gridPosition.height
+        )
         let imp = MomentImportance(rawValue: importance) ?? .medium
 
         return Moment(
@@ -557,8 +599,7 @@ extension ConvexMoment {
             eventName: eventName,
             voiceNoteURL: voiceNoteURL,
             importance: imp,
-            layoutPosition: pos,
-            layoutSize: size
+            gridPosition: gridPos
         )
     }
 }

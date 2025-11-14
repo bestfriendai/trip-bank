@@ -179,8 +179,7 @@ class TripStore: ObservableObject {
                     eventName: moment.eventName,
                     voiceNoteURL: moment.voiceNoteURL,
                     importance: moment.importance.rawValue,
-                    layoutPosition: moment.layoutPosition,
-                    layoutSize: moment.layoutSize?.rawValue
+                    gridPosition: moment.gridPosition
                 )
 
                 // Update local state
@@ -318,7 +317,7 @@ class TripStore: ObservableObject {
             type: .photo
         )
 
-        // Create sample moments to demonstrate the spatial canvas
+        // Create sample moments to demonstrate the grid canvas
         let sampleMoments = [
             Moment(
                 title: "Sunset at Belém Tower",
@@ -326,7 +325,8 @@ class TripStore: ObservableObject {
                 mediaItemIDs: [media3.id],
                 date: Calendar.current.date(byAdding: .day, value: -13, to: Date()),
                 placeName: "Belém Tower",
-                importance: .hero
+                importance: .hero,
+                gridPosition: GridPosition(column: 0, row: 0, width: 2, height: 2.0)
             ),
             Moment(
                 title: "Arrival in Lisbon",
@@ -334,7 +334,8 @@ class TripStore: ObservableObject {
                 mediaItemIDs: [media1.id, media2.id],
                 date: Calendar.current.date(byAdding: .day, value: -14, to: Date()),
                 placeName: "Lisbon Airport",
-                importance: .medium
+                importance: .medium,
+                gridPosition: GridPosition(column: 0, row: 2.0, width: 1, height: 1.5)
             ),
             Moment(
                 title: "Pastéis de Nata Tasting",
@@ -342,7 +343,8 @@ class TripStore: ObservableObject {
                 mediaItemIDs: [media4.id],
                 date: Calendar.current.date(byAdding: .day, value: -13, to: Date()),
                 placeName: "Pastéis de Belém",
-                importance: .small
+                importance: .small,
+                gridPosition: GridPosition(column: 1, row: 2.0, width: 1, height: 1.0)
             ),
             Moment(
                 title: "Tram 28 Adventure",
@@ -350,7 +352,8 @@ class TripStore: ObservableObject {
                 mediaItemIDs: [media5.id, media6.id],
                 date: Calendar.current.date(byAdding: .day, value: -12, to: Date()),
                 placeName: "Alfama District",
-                importance: .medium
+                importance: .medium,
+                gridPosition: GridPosition(column: 0, row: 3.5, width: 1, height: 1.5)
             ),
             Moment(
                 title: "Fado Night",
@@ -359,7 +362,8 @@ class TripStore: ObservableObject {
                 date: Calendar.current.date(byAdding: .day, value: -11, to: Date()),
                 placeName: "Bairro Alto",
                 eventName: "Fado Performance",
-                importance: .large
+                importance: .large,
+                gridPosition: GridPosition(column: 1, row: 3.0, width: 1, height: 2.0)
             ),
             Moment(
                 title: "Beach Day in Cascais",
@@ -367,7 +371,8 @@ class TripStore: ObservableObject {
                 mediaItemIDs: [media8.id],
                 date: Calendar.current.date(byAdding: .day, value: -10, to: Date()),
                 placeName: "Cascais Beach",
-                importance: .large
+                importance: .large,
+                gridPosition: GridPosition(column: 0, row: 5.0, width: 1, height: 2.0)
             )
         ]
 

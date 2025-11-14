@@ -104,6 +104,13 @@ struct CreateMomentView: View {
     }
 
     private func createMoment() {
+        // Calculate grid position for new moment
+        let desiredSize = GridLayoutCalculator.gridSizeFromImportance(importance)
+        let gridPosition = GridLayoutCalculator.calculateNextGridPosition(
+            existingMoments: trip.moments,
+            momentSize: desiredSize
+        )
+
         let newMoment = Moment(
             title: title,
             note: note.isEmpty ? nil : note,
@@ -111,7 +118,8 @@ struct CreateMomentView: View {
             date: date,
             placeName: placeName.isEmpty ? nil : placeName,
             eventName: eventName.isEmpty ? nil : eventName,
-            importance: importance
+            importance: importance,
+            gridPosition: gridPosition
         )
 
         tripStore.addMoment(to: trip.id, moment: newMoment)
@@ -228,10 +236,18 @@ struct MediaThumbnailView: View {
 
         do {
             let urlString = try await ConvexClient.shared.getFileUrl(storageId: storageId)
+
+            // Check if task was cancelled
+            try Task.checkCancellation()
+
             if let url = URL(string: urlString) {
                 imageURL = url
             }
+        } catch is CancellationError {
+            // Task was cancelled, this is normal - don't log error
+            return
         } catch {
+            // Only log non-cancellation errors
             print("❌ Failed to load thumbnail URL from Convex: \(error)")
         }
 

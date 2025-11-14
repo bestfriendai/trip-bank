@@ -55,6 +55,7 @@ struct MomentCardView: View {
         }
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: 20))
+        .contentShape(RoundedRectangle(cornerRadius: 20))
         .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 6)
         .scaleEffect(isPressed ? 0.97 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
@@ -96,6 +97,7 @@ struct MomentCardView: View {
                 .frame(width: size.width, height: size.height)
         } else {
             MediaImageView(mediaItem: mediaItem)
+                .id(mediaItem.id)
                 .scaledToFill()
                 .frame(width: size.width, height: size.height)
         }
@@ -143,6 +145,7 @@ struct MomentCardView: View {
                 .clipped()
         } else {
             MediaImageView(mediaItem: mediaItem)
+                .id(mediaItem.id)
                 .scaledToFill()
                 .frame(width: validWidth, height: validHeight)
                 .clipped()

@@ -22,6 +22,7 @@ struct EditMediaItemView: View {
             Form {
                 Section {
                     MediaImageView(mediaItem: mediaItem)
+                        .id(mediaItem.id)
                         .scaledToFit()
                         .frame(height: 200)
                         .frame(maxWidth: .infinity)

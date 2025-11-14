@@ -100,6 +100,7 @@ struct MediaItemTile: View {
 
     var body: some View {
         MediaImageView(mediaItem: mediaItem)
+            .id(mediaItem.id)
             .scaledToFill()
             .frame(width: 100, height: 100)
             .clipShape(RoundedRectangle(cornerRadius: 8))

@@ -73,20 +73,12 @@ export default defineSchema({
       v.literal("large"),
       v.literal("hero")
     ),
-    layoutPosition: v.optional(v.object({
-      x: v.number(),
-      y: v.number(),
-    })),
-    layoutSize: v.optional(
-      v.union(
-        v.literal("compact"),
-        v.literal("regular"),
-        v.literal("large"),
-        v.literal("hero"),
-        v.literal("wide"),
-        v.literal("tall")
-      )
-    ),
+    gridPosition: v.object({
+      column: v.number(), // 0 = left, 1 = right
+      row: v.number(), // 0, 0.5, 1, 1.5, 2, 2.5, 3, etc.
+      width: v.number(), // 1 or 2 (columns)
+      height: v.number(), // 1, 1.5, 2, 2.5, 3, etc. (rows)
+    }),
 
     // Timestamps
     createdAt: v.number(),

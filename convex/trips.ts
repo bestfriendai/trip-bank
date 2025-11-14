@@ -191,20 +191,12 @@ export const addMoment = mutation({
       v.literal("large"),
       v.literal("hero")
     ),
-    layoutPosition: v.optional(v.object({
-      x: v.number(),
-      y: v.number(),
-    })),
-    layoutSize: v.optional(
-      v.union(
-        v.literal("compact"),
-        v.literal("regular"),
-        v.literal("large"),
-        v.literal("hero"),
-        v.literal("wide"),
-        v.literal("tall")
-      )
-    ),
+    gridPosition: v.object({
+      column: v.number(),
+      row: v.number(),
+      width: v.number(),
+      height: v.number(),
+    }),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
@@ -224,8 +216,7 @@ export const addMoment = mutation({
       eventName: args.eventName,
       voiceNoteURL: args.voiceNoteURL,
       importance: args.importance,
-      layoutPosition: args.layoutPosition,
-      layoutSize: args.layoutSize,
+      gridPosition: args.gridPosition,
       createdAt: now,
       updatedAt: now,
     });
@@ -473,6 +464,44 @@ export const updateMoment = mutation({
     if (args.importance !== undefined) updates.importance = args.importance;
 
     await ctx.db.patch(moment._id, updates);
+    return { success: true };
+  },
+});
+
+// Update moment grid position (for drag/resize operations)
+export const updateMomentGridPosition = mutation({
+  args: {
+    momentId: v.string(),
+    gridPosition: v.object({
+      column: v.number(),
+      row: v.number(),
+      width: v.number(),
+      height: v.number(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+
+    // Find the moment
+    const moment = await ctx.db
+      .query("moments")
+      .withIndex("by_momentId", (q) => q.eq("momentId", args.momentId))
+      .first();
+
+    if (!moment) {
+      throw new Error(`Moment not found: ${args.momentId}`);
+    }
+
+    // Verify ownership
+    if (moment.userId !== userId) {
+      throw new Error("Unauthorized: You don't own this moment");
+    }
+
+    await ctx.db.patch(moment._id, {
+      gridPosition: args.gridPosition,
+      updatedAt: Date.now(),
+    });
+
     return { success: true };
   },
 });

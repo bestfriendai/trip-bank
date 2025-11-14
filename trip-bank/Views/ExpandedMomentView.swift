@@ -67,6 +67,7 @@ struct ExpandedMomentView: View {
                                     .tag(index)
                             } else {
                                 MediaImageView(mediaItem: mediaItem)
+                                    .id(mediaItem.id)
                                     .scaledToFit()
                                     .tag(index)
                             }

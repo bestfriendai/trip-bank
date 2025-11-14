@@ -16,9 +16,8 @@ struct Moment: Identifiable, Codable {
     var voiceNoteURL: String? // Path to audio file (future feature)
 
     // Visual layout properties for spatial canvas
-    var importance: MomentImportance // Determines size on canvas
-    var layoutPosition: CGPoint? // Position on canvas (auto-generated or manual)
-    var layoutSize: MomentSize? // Size category (auto-generated or manual)
+    var importance: MomentImportance // Determines initial size on canvas
+    var gridPosition: GridPosition // Position and size in grid
 
     init(id: UUID = UUID(),
          title: String,
@@ -30,8 +29,7 @@ struct Moment: Identifiable, Codable {
          eventName: String? = nil,
          voiceNoteURL: String? = nil,
          importance: MomentImportance = .medium,
-         layoutPosition: CGPoint? = nil,
-         layoutSize: MomentSize? = nil) {
+         gridPosition: GridPosition) {
         self.id = id
         self.title = title
         self.note = note
@@ -42,25 +40,22 @@ struct Moment: Identifiable, Codable {
         self.eventName = eventName
         self.voiceNoteURL = voiceNoteURL
         self.importance = importance
-        self.layoutPosition = layoutPosition
-        self.layoutSize = layoutSize
+        self.gridPosition = gridPosition
     }
 }
 
-// Importance level affects size on the spatial canvas
-enum MomentImportance: String, Codable {
-    case small // Minor moments, takes less space
-    case medium // Regular moments
-    case large // Important highlights, takes more space
-    case hero // Key moments of the trip, largest size
+// Grid position in 2-column masonry layout
+struct GridPosition: Codable, Equatable {
+    var column: Int // 0 = left, 1 = right
+    var row: Double // 0, 0.5, 1, 1.5, 2, 2.5, 3, etc.
+    var width: Int // 1 or 2 (columns)
+    var height: Double // 1, 1.5, 2, 2.5, 3, etc. (rows)
 }
 
-// Pre-defined size categories for moments on canvas
-enum MomentSize: String, Codable {
-    case compact // ~150x150 pts
-    case regular // ~200x200 pts
-    case large // ~300x200 pts
-    case hero // ~350x300 pts
-    case wide // ~350x180 pts (panoramic)
-    case tall // ~180x300 pts (portrait)
+// Importance level affects initial grid size
+enum MomentImportance: String, Codable {
+    case small // Minor moments - 1x1
+    case medium // Regular moments - 1x1.5
+    case large // Important highlights - 1x2 or 2x1.5
+    case hero // Key moments - 2x2
 }
