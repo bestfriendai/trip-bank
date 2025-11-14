@@ -13,6 +13,7 @@ struct TripCanvasView: View {
     @State private var draggingMoment: UUID?
     @State private var dragOffset: CGSize = .zero
     @State private var dragStartPosition: CGPoint = .zero
+    @State private var previewGridPosition: GridPosition?
 
     // Resize state
     @State private var showingResizePicker = false
@@ -25,7 +26,31 @@ struct TripCanvasView: View {
         tripStore.trips.first(where: { $0.id == tripId }) ?? Trip(id: tripId, title: "Unknown")
     }
 
+    // Get trip with preview position applied during drag
+    private var displayTrip: Trip {
+        guard let draggingId = draggingMoment,
+              let previewPos = previewGridPosition else {
+            return trip
+        }
+
+        var tempTrip = trip
+        if let momentIndex = tempTrip.moments.firstIndex(where: { $0.id == draggingId }) {
+            var updatedMoment = tempTrip.moments[momentIndex]
+            updatedMoment.gridPosition = previewPos
+            tempTrip.moments[momentIndex] = updatedMoment
+            // Reflow to show live preview - pin the dragged moment so it stays where we put it
+            tempTrip.moments = GridLayoutCalculator.reflowMoments(tempTrip.moments, pinnedMomentId: draggingId)
+        }
+        return tempTrip
+    }
+
+    // Layout for preview (other moments reflow around dragged moment)
     private var momentLayouts: [UUID: MomentLayout] {
+        GridLayoutCalculator.calculateLayout(for: displayTrip.moments, canvasWidth: canvasSize.width)
+    }
+
+    // Original layout (used for dragged moment so it doesn't jump)
+    private var originalMomentLayouts: [UUID: MomentLayout] {
         GridLayoutCalculator.calculateLayout(for: trip.moments, canvasWidth: canvasSize.width)
     }
 
@@ -44,7 +69,10 @@ struct TripCanvasView: View {
 
                         // Moments on canvas
                         ForEach(Array(trip.moments.enumerated()), id: \.element.id) { index, moment in
-                            if let layout = momentLayouts[moment.id],
+                            // Use original layout for dragged moment, preview layout for others
+                            let layout = (draggingMoment == moment.id ? originalMomentLayouts : momentLayouts)[moment.id]
+
+                            if let layout = layout,
                                layout.size.width > 0,
                                layout.size.height > 0 {
                                 momentCardView(for: moment, at: index, with: layout)
@@ -57,6 +85,7 @@ struct TripCanvasView: View {
                     height: max(geometry.size.height, canvasContentHeight)
                 )
             }
+            .scrollDisabled(draggingMoment != nil)
             .onAppear {
                 if geometry.size.width > 0 && geometry.size.height > 0 {
                     canvasSize = geometry.size
@@ -221,6 +250,10 @@ struct TripCanvasView: View {
         )
         .zIndex(isDragging ? 1000 : Double(layout.zIndex))
         .animation(
+            isOtherBeingDragged ? .spring(response: 0.4, dampingFraction: 0.8) : nil,
+            value: layout.position
+        )
+        .animation(
             isDragging ? nil : .spring(response: 0.6, dampingFraction: 0.75).delay(Double(index) * 0.1),
             value: appearingMoments
         )
@@ -231,10 +264,10 @@ struct TripCanvasView: View {
                 }
         )
         .simultaneousGesture(
-            DragGesture()
+            DragGesture(minimumDistance: 0)
                 .onChanged { value in
                     guard draggingMoment == moment.id else { return }
-                    dragOffset = value.translation
+                    handleDragChanged(value, for: moment, at: layout.position)
                 }
                 .onEnded { value in
                     guard draggingMoment == moment.id else { return }
@@ -257,24 +290,47 @@ struct TripCanvasView: View {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
 
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            draggingMoment = moment.id
-            dragOffset = .zero
-            dragStartPosition = position
+        draggingMoment = moment.id
+        dragOffset = .zero
+        dragStartPosition = position
+        previewGridPosition = moment.gridPosition
+    }
+
+    private func handleDragChanged(_ value: DragGesture.Value, for moment: Moment, at position: CGPoint) {
+        // Update visual offset
+        dragOffset = value.translation
+
+        // Calculate current top-left position after drag
+        let currentTopLeft = CGPoint(
+            x: position.x + value.translation.width,
+            y: position.y + value.translation.height
+        )
+
+        // Convert to grid position for live preview (use center of card for intuitive snapping)
+        let newGridPosition = pixelToGridPosition(currentTopLeft, momentSize: moment.gridPosition)
+
+        // Only update if position changed (avoid unnecessary reflows)
+        if previewGridPosition?.column != newGridPosition.column ||
+           previewGridPosition?.row != newGridPosition.row {
+            previewGridPosition = newGridPosition
         }
     }
 
     private func handleDragEnd(_ value: DragGesture.Value, for moment: Moment) {
-        // Calculate final position after drag
-        let finalPosition = CGPoint(
-            x: dragStartPosition.x + value.translation.width,
-            y: dragStartPosition.y + value.translation.height
-        )
+        // Use the preview position (already calculated during drag)
+        guard let newGridPosition = previewGridPosition else {
+            // Fallback: reset drag state
+            draggingMoment = nil
+            dragOffset = .zero
+            previewGridPosition = nil
+            return
+        }
 
-        // Convert to grid position
-        let newGridPosition = pixelToGridPosition(finalPosition, momentSize: moment.gridPosition)
+        // Haptic feedback for drop
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
 
-        // Update moment locally (optimistic) and reflow
+        // Update moment locally and reflow
         var reflowedMoments: [Moment] = []
         if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == tripId }),
            let momentIndex = tripStore.trips[tripIndex].moments.firstIndex(where: { $0.id == moment.id }) {
@@ -282,10 +338,15 @@ struct TripCanvasView: View {
             // Update this moment's position
             tripStore.trips[tripIndex].moments[momentIndex].gridPosition = newGridPosition
 
-            // Reflow all moments to pack from top
-            reflowedMoments = GridLayoutCalculator.reflowMoments(tripStore.trips[tripIndex].moments)
+            // Reflow all moments to pack from top - pin the dragged moment to preserve its position
+            reflowedMoments = GridLayoutCalculator.reflowMoments(tripStore.trips[tripIndex].moments, pinnedMomentId: moment.id)
             tripStore.trips[tripIndex].moments = reflowedMoments
         }
+
+        // Reset drag state (animations handled by view modifiers)
+        draggingMoment = nil
+        dragOffset = .zero
+        previewGridPosition = nil
 
         // Save ALL reflowed moments to backend
         Task {
@@ -295,36 +356,33 @@ struct TripCanvasView: View {
                 print("❌ Failed to update moment positions: \(error)")
             }
         }
-
-        // Reset drag state
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            draggingMoment = nil
-            dragOffset = .zero
-        }
-
-        // Haptic feedback for drop
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.impactOccurred()
     }
 
     // MARK: - Grid Conversion
 
-    private func pixelToGridPosition(_ pixel: CGPoint, momentSize: GridPosition) -> GridPosition {
-        // Determine column (0 or 1)
+    private func pixelToGridPosition(_ topLeft: CGPoint, momentSize: GridPosition) -> GridPosition {
         let columnWidth = (canvasSize.width - (GridLayoutCalculator.sideMargin * 2) - GridLayoutCalculator.columnSpacing) / CGFloat(GridLayoutCalculator.numberOfColumns)
-        let midPoint = canvasSize.width / 2
+        let cardWidth = momentSize.width == 2 ?
+            (columnWidth * 2 + GridLayoutCalculator.columnSpacing) :
+            columnWidth
+
+        // Use center X for column snapping (feels natural for horizontal movement)
+        let centerX = topLeft.x + cardWidth / 2
+
+        // Calculate actual column boundary (accounting for margins)
+        let columnBoundary = GridLayoutCalculator.sideMargin + columnWidth + (GridLayoutCalculator.columnSpacing / 2)
 
         let column: Int
         if momentSize.width == 2 {
             // Full width always column 0
             column = 0
         } else {
-            // Snap to nearest column
-            column = pixel.x < midPoint ? 0 : 1
+            // Snap based on which side of the column boundary the card center is on
+            column = centerX < columnBoundary ? 0 : 1
         }
 
-        // Determine row (snap to 0.5 increments)
-        let rawRow = pixel.y / (GridLayoutCalculator.rowHeight + GridLayoutCalculator.rowSpacing)
+        // Use top-left Y for row snapping (more intuitive - top aligns to row position)
+        let rawRow = topLeft.y / (GridLayoutCalculator.rowHeight + GridLayoutCalculator.rowSpacing)
         let snappedRow = (rawRow * 2).rounded() / 2 // Snap to 0.5 increments
         let row = max(0, snappedRow)
 
@@ -349,8 +407,8 @@ struct TripCanvasView: View {
             updatedPosition.height = previewHeight
             tripStore.trips[tripIndex].moments[momentIndex].gridPosition = updatedPosition
 
-            // Reflow all moments to pack from top
-            let reflowedMoments = GridLayoutCalculator.reflowMoments(tripStore.trips[tripIndex].moments)
+            // Reflow all moments to pack from top - pin the resizing moment to preserve its position
+            let reflowedMoments = GridLayoutCalculator.reflowMoments(tripStore.trips[tripIndex].moments, pinnedMomentId: moment.id)
             tripStore.trips[tripIndex].moments = reflowedMoments
         }
     }
