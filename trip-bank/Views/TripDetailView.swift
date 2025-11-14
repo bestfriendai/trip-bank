@@ -157,10 +157,3 @@ struct TripDetailView: View {
         }
     }
 }
-
-#Preview {
-    NavigationStack {
-        TripDetailView(trip: Trip(title: "Portugal Adventure"))
-            .environmentObject(TripStore())
-    }
-}

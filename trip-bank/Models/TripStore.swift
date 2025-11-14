@@ -51,9 +51,6 @@ class TripStore: ObservableObject {
         } catch {
             errorMessage = "Failed to load trips: \(error.localizedDescription)"
             print("Error loading trips: \(error)")
-
-            // Fallback to sample data if backend fails
-            loadSampleData()
         }
 
         isLoading = false
@@ -290,105 +287,4 @@ class TripStore: ObservableObject {
         }
     }
 
-    // MARK: - Sample Data
-    private func loadSampleData() {
-        // Create sample media items with placeholder images (using picsum.photos)
-        // These are guaranteed to load and provide nice travel-related images
-        let media1 = MediaItem(
-            imageURL: URL(string: "https://picsum.photos/seed/lisbon1/800/800"),
-            type: .photo
-        )
-        let media2 = MediaItem(
-            imageURL: URL(string: "https://picsum.photos/seed/lisbon2/800/800"),
-            type: .photo
-        )
-        let media3 = MediaItem(
-            imageURL: URL(string: "https://picsum.photos/seed/belem/800/800"),
-            type: .photo
-        )
-        let media4 = MediaItem(
-            imageURL: URL(string: "https://picsum.photos/seed/pasteis/800/800"),
-            type: .photo
-        )
-        let media5 = MediaItem(
-            imageURL: URL(string: "https://picsum.photos/seed/tram1/800/800"),
-            type: .photo
-        )
-        let media6 = MediaItem(
-            imageURL: URL(string: "https://picsum.photos/seed/tram2/800/800"),
-            type: .photo
-        )
-        let media7 = MediaItem(
-            imageURL: URL(string: "https://picsum.photos/seed/fado/800/800"),
-            type: .photo
-        )
-        let media8 = MediaItem(
-            imageURL: URL(string: "https://picsum.photos/seed/cascais/800/800"),
-            type: .photo
-        )
-
-        // Create sample moments to demonstrate the grid canvas
-        let sampleMoments = [
-            Moment(
-                title: "Sunset at Belém Tower",
-                note: "One of the most iconic landmarks. The golden hour light was perfect.",
-                mediaItemIDs: [media3.id],
-                date: Calendar.current.date(byAdding: .day, value: -13, to: Date()),
-                placeName: "Belém Tower",
-                gridPosition: GridPosition(column: 0, row: 0, width: 2, height: 2.0)
-            ),
-            Moment(
-                title: "Arrival in Lisbon",
-                note: "First impressions of this beautiful city. The architecture is stunning!",
-                mediaItemIDs: [media1.id, media2.id],
-                date: Calendar.current.date(byAdding: .day, value: -14, to: Date()),
-                placeName: "Lisbon Airport",
-                gridPosition: GridPosition(column: 0, row: 2.0, width: 1, height: 1.5)
-            ),
-            Moment(
-                title: "Pastéis de Nata Tasting",
-                note: "Best custard tarts I've ever had. Warm from the oven!",
-                mediaItemIDs: [media4.id],
-                date: Calendar.current.date(byAdding: .day, value: -13, to: Date()),
-                placeName: "Pastéis de Belém",
-                gridPosition: GridPosition(column: 1, row: 2.0, width: 1, height: 1.0)
-            ),
-            Moment(
-                title: "Tram 28 Adventure",
-                note: "Riding the famous yellow tram through narrow streets",
-                mediaItemIDs: [media5.id, media6.id],
-                date: Calendar.current.date(byAdding: .day, value: -12, to: Date()),
-                placeName: "Alfama District",
-                gridPosition: GridPosition(column: 0, row: 3.5, width: 1, height: 1.5)
-            ),
-            Moment(
-                title: "Fado Night",
-                note: "Traditional Portuguese music in a cozy restaurant. Emotional and beautiful.",
-                mediaItemIDs: [media7.id],
-                date: Calendar.current.date(byAdding: .day, value: -11, to: Date()),
-                placeName: "Bairro Alto",
-                eventName: "Fado Performance",
-                gridPosition: GridPosition(column: 1, row: 3.0, width: 1, height: 2.0)
-            ),
-            Moment(
-                title: "Beach Day in Cascais",
-                note: "Perfect day trip from Lisbon. Crystal clear water!",
-                mediaItemIDs: [media8.id],
-                date: Calendar.current.date(byAdding: .day, value: -10, to: Date()),
-                placeName: "Cascais Beach",
-                gridPosition: GridPosition(column: 0, row: 5.0, width: 1, height: 2.0)
-            )
-        ]
-
-        // Create a sample trip
-        let portugalTrip = Trip(
-            title: "Portugal Adventure",
-            startDate: Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date(),
-            endDate: Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date(),
-            mediaItems: [media1, media2, media3, media4, media5, media6, media7, media8],
-            moments: sampleMoments
-        )
-
-        trips = [portugalTrip]
-    }
 }

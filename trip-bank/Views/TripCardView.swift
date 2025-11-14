@@ -70,8 +70,3 @@ struct TripCardView: View {
         }
     }
 }
-
-#Preview {
-    TripCardView(trip: Trip(title: "Portugal Adventure"))
-        .padding()
-}
