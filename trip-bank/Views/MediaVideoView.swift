@@ -4,36 +4,39 @@ import AVKit
 // View that displays video from Convex storage or remote URL
 struct MediaVideoView: View {
     let mediaItem: MediaItem
+    var isInExpandedView: Bool = false // Track if this is in expanded view
+
     @State private var videoURL: URL?
     @State private var isLoading = false
     @State private var loadFailed = false
     @State private var player: AVPlayer?
-    @State private var isMuted = true
+    @StateObject private var audioManager = VideoAudioManager.shared
+
+    private var isMuted: Bool {
+        // Canvas videos are muted when expanded view is active
+        if !isInExpandedView && audioManager.isExpandedViewActive {
+            return true
+        }
+        return !audioManager.isPlaying(videoId: mediaItem.id)
+    }
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
             if let url = videoURL, let player = player {
                 VideoPlayer(player: player)
                     .disabled(true) // Disable default controls
                     .onAppear {
+                        updatePlayerMuteState()
                         player.play()
                     }
                     .onDisappear {
                         player.pause()
+                        audioManager.stopAudioPlayback(for: mediaItem.id)
                     }
-
-                // Mute/unmute button
-                Button {
-                    isMuted.toggle()
-                    player.isMuted = isMuted
-                } label: {
-                    Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(.title3)
-                        .foregroundStyle(.white)
-                        .padding(8)
-                        .background(Circle().fill(.black.opacity(0.5)))
-                }
-                .padding(8)
+                    // Continuously enforce mute state
+                    .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { _ in
+                        updatePlayerMuteState()
+                    }
             } else if isLoading {
                 ZStack {
                     Color.gray.opacity(0.1)
@@ -60,6 +63,14 @@ struct MediaVideoView: View {
             if let url = newValue {
                 setupPlayer(url: url)
             }
+        }
+        .onChange(of: audioManager.currentlyPlayingVideoId) { oldValue, newValue in
+            // Update mute state when another video starts/stops playing audio
+            updatePlayerMuteState()
+        }
+        .onChange(of: audioManager.isExpandedViewActive) { oldValue, newValue in
+            // Update mute state when expanded view opens/closes
+            updatePlayerMuteState()
         }
     }
 
@@ -100,9 +111,28 @@ struct MediaVideoView: View {
         isLoading = false
     }
 
+    private func toggleMute() {
+        if isMuted {
+            // Unmute this video (will mute all others via the manager)
+            audioManager.requestAudioPlayback(for: mediaItem.id)
+        } else {
+            // Mute this video
+            audioManager.stopAudioPlayback(for: mediaItem.id)
+        }
+        updatePlayerMuteState()
+    }
+
+    private func updatePlayerMuteState() {
+        guard let player = player else { return }
+        player.isMuted = isMuted
+        // Also control volume to ensure no audio leaks through
+        player.volume = isMuted ? 0.0 : 1.0
+    }
+
     private func setupPlayer(url: URL) {
         let player = AVPlayer(url: url)
-        player.isMuted = isMuted
+        player.isMuted = true // Always start muted
+        player.volume = 0.0 // Ensure no audio plays
         player.actionAtItemEnd = .none
 
         // Loop video

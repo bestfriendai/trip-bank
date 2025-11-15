@@ -111,6 +111,10 @@ export const deleteTrip = mutation({
       if (item.storageId) {
         await ctx.storage.delete(item.storageId);
       }
+      // Delete thumbnail from storage if it exists
+      if (item.thumbnailStorageId) {
+        await ctx.storage.delete(item.thumbnailStorageId);
+      }
       await ctx.db.delete(item._id);
     }
 
@@ -141,6 +145,7 @@ export const addMediaItem = mutation({
     mediaItemId: v.string(),
     tripId: v.string(),
     storageId: v.optional(v.id("_storage")),
+    thumbnailStorageId: v.optional(v.id("_storage")),
     imageURL: v.optional(v.string()),
     videoURL: v.optional(v.string()),
     type: v.union(v.literal("photo"), v.literal("video")),
@@ -158,6 +163,7 @@ export const addMediaItem = mutation({
       mediaItemId: args.mediaItemId,
       tripId: args.tripId,
       storageId: args.storageId,
+      thumbnailStorageId: args.thumbnailStorageId,
       imageURL: args.imageURL,
       videoURL: args.videoURL,
       type: args.type,
@@ -347,6 +353,11 @@ export const deleteMediaItem = mutation({
     // Delete file from storage if it exists
     if (mediaItem.storageId) {
       await ctx.storage.delete(mediaItem.storageId);
+    }
+
+    // Delete thumbnail from storage if it exists
+    if (mediaItem.thumbnailStorageId) {
+      await ctx.storage.delete(mediaItem.thumbnailStorageId);
     }
 
     // Delete the media item

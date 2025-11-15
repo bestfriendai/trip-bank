@@ -8,7 +8,8 @@ enum MediaType: String, Codable {
 
 struct MediaItem: Identifiable, Codable {
     let id: UUID
-    var storageId: String? // Convex storage ID
+    var storageId: String? // Convex storage ID (for photos or videos)
+    var thumbnailStorageId: String? // Convex storage ID for video thumbnail
     var imageURL: URL? // For remote images (e.g., Unsplash)
     var videoURL: URL? // For video files
     var type: MediaType
@@ -18,6 +19,7 @@ struct MediaItem: Identifiable, Codable {
 
     init(id: UUID = UUID(),
          storageId: String? = nil,
+         thumbnailStorageId: String? = nil,
          imageURL: URL? = nil,
          videoURL: URL? = nil,
          type: MediaType = .photo,
@@ -26,6 +28,7 @@ struct MediaItem: Identifiable, Codable {
          timestamp: Date = Date()) {
         self.id = id
         self.storageId = storageId
+        self.thumbnailStorageId = thumbnailStorageId
         self.imageURL = imageURL
         self.videoURL = videoURL
         self.type = type

@@ -9,6 +9,24 @@ struct MomentCardView: View {
     let onTap: () -> Void
 
     @State private var isPressed = false
+    @StateObject private var audioManager = VideoAudioManager.shared
+
+    private var isSingleVideo: Bool {
+        mediaItems.count == 1 && mediaItems.first?.type == .video
+    }
+
+    private var singleVideoId: UUID? {
+        isSingleVideo ? mediaItems.first?.id : nil
+    }
+
+    private var isMuted: Bool {
+        guard let videoId = singleVideoId else { return true }
+        // Canvas videos are muted when expanded view is active
+        if audioManager.isExpandedViewActive {
+            return true
+        }
+        return !audioManager.isPlaying(videoId: videoId)
+    }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -52,6 +70,18 @@ struct MomentCardView: View {
                 }
             }
             .padding(16)
+
+            // Mute button for single-video moments (positioned at bottom-trailing)
+            if isSingleVideo, let videoId = singleVideoId {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        MuteButton(videoId: videoId, isMuted: isMuted)
+                            .padding(12)
+                    }
+                }
+            }
         }
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: 20))
@@ -93,7 +123,7 @@ struct MomentCardView: View {
     @ViewBuilder
     private func singleMediaView(_ mediaItem: MediaItem) -> some View {
         if mediaItem.type == .video {
-            MediaVideoView(mediaItem: mediaItem)
+            MediaVideoView(mediaItem: mediaItem, isInExpandedView: false)
                 .id(mediaItem.id)
                 .frame(width: size.width, height: size.height)
         } else {
@@ -151,6 +181,40 @@ struct MomentCardView: View {
                 .scaledToFill()
                 .frame(width: validWidth, height: validHeight)
                 .clipped()
+        }
+    }
+}
+
+// Mute button component that prevents tap propagation to parent
+struct MuteButton: View {
+    let videoId: UUID
+    let isMuted: Bool
+    @StateObject private var audioManager = VideoAudioManager.shared
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.black.opacity(0.6))
+                .frame(width: 44, height: 44)
+
+            Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.title3)
+                .foregroundStyle(.white)
+        }
+        .contentShape(Circle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onEnded { _ in
+                    toggleMute()
+                }
+        )
+    }
+
+    private func toggleMute() {
+        if isMuted {
+            audioManager.requestAudioPlayback(for: videoId)
+        } else {
+            audioManager.stopAudioPlayback(for: videoId)
         }
     }
 }

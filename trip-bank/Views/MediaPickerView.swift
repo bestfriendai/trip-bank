@@ -118,13 +118,24 @@ struct MediaPickerView: View {
 
             do {
                 let storageId: String
+                let thumbnailStorageId: String?
                 let mediaType: MediaType
 
                 if item.isVideo, let videoURL = item.videoURL {
+                    // Upload the video file
                     storageId = try await convexClient.uploadVideo(videoURL)
+
+                    // Upload the thumbnail image if available
+                    if let thumbnail = item.image {
+                        thumbnailStorageId = try await convexClient.uploadImage(thumbnail)
+                    } else {
+                        thumbnailStorageId = nil
+                    }
+
                     mediaType = .video
                 } else if let image = item.image {
                     storageId = try await convexClient.uploadImage(image)
+                    thumbnailStorageId = nil
                     mediaType = .photo
                 } else {
                     continue
@@ -132,6 +143,7 @@ struct MediaPickerView: View {
 
                 newMediaItems.append(MediaItem(
                     storageId: storageId,
+                    thumbnailStorageId: thumbnailStorageId,
                     type: mediaType,
                     captureDate: Date()
                 ))

@@ -89,6 +89,15 @@ struct MediaItemTile: View {
                 .scaledToFill()
                 .frame(width: 100, height: 100)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    // Video play icon
+                    if mediaItem.type == .video {
+                        Image(systemName: "play.circle.fill")
+                            .foregroundStyle(.white)
+                            .font(.title2)
+                            .shadow(radius: 2)
+                    }
+                }
 
             // Delete button (top-right corner)
             VStack {

@@ -217,6 +217,15 @@ struct MediaThumbnailView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 3)
             }
+            .overlay {
+                // Video play icon
+                if mediaItem.type == .video {
+                    Image(systemName: "play.circle.fill")
+                        .foregroundStyle(.white)
+                        .font(.title2)
+                        .shadow(radius: 2)
+                }
+            }
 
             // Selection indicator
             if isSelected {
@@ -240,8 +249,16 @@ struct MediaThumbnailView: View {
             return
         }
 
+        // For videos, try to load thumbnail first
+        let storageIdToLoad: String?
+        if mediaItem.type == .video {
+            storageIdToLoad = mediaItem.thumbnailStorageId ?? mediaItem.storageId
+        } else {
+            storageIdToLoad = mediaItem.storageId
+        }
+
         // Try to load from Convex storage
-        guard let storageId = mediaItem.storageId, !storageId.isEmpty else {
+        guard let storageId = storageIdToLoad, !storageId.isEmpty else {
             return
         }
 

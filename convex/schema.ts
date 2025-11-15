@@ -35,6 +35,7 @@ export default defineSchema({
     mediaItemId: v.string(), // UUID from Swift
     tripId: v.string(), // Reference to parent trip
     storageId: v.optional(v.id("_storage")), // Convex file storage ID
+    thumbnailStorageId: v.optional(v.id("_storage")), // Thumbnail for videos
     imageURL: v.optional(v.string()),
     videoURL: v.optional(v.string()),
     type: v.union(v.literal("photo"), v.literal("video")),

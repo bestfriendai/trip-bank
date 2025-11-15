@@ -11,6 +11,21 @@ struct ExpandedMomentView: View {
     @State private var currentPhotoIndex = 0
     @State private var showingEditMoment = false
     @State private var showingDeleteConfirmation = false
+    @StateObject private var audioManager = VideoAudioManager.shared
+
+    private var currentMediaItem: MediaItem? {
+        guard !mediaItems.isEmpty, currentPhotoIndex < mediaItems.count else { return nil }
+        return mediaItems[currentPhotoIndex]
+    }
+
+    private var isCurrentMediaVideo: Bool {
+        currentMediaItem?.type == .video
+    }
+
+    private var isMuted: Bool {
+        guard let mediaItem = currentMediaItem else { return true }
+        return !audioManager.isPlaying(videoId: mediaItem.id)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -58,24 +73,32 @@ struct ExpandedMomentView: View {
 
                 // Media carousel (photos and videos)
                 if !mediaItems.isEmpty {
-                    TabView(selection: $currentPhotoIndex) {
-                        ForEach(mediaItems.indices, id: \.self) { index in
-                            let mediaItem = mediaItems[index]
-                            if mediaItem.type == .video {
-                                MediaVideoView(mediaItem: mediaItem)
-                                    .id(mediaItem.id)
-                                    .scaledToFit()
-                                    .tag(index)
-                            } else {
-                                MediaImageView(mediaItem: mediaItem)
-                                    .id(mediaItem.id)
-                                    .scaledToFit()
-                                    .tag(index)
+                    ZStack(alignment: .bottomTrailing) {
+                        TabView(selection: $currentPhotoIndex) {
+                            ForEach(mediaItems.indices, id: \.self) { index in
+                                let mediaItem = mediaItems[index]
+                                if mediaItem.type == .video {
+                                    MediaVideoView(mediaItem: mediaItem, isInExpandedView: true)
+                                        .id(mediaItem.id)
+                                        .scaledToFit()
+                                        .tag(index)
+                                } else {
+                                    MediaImageView(mediaItem: mediaItem)
+                                        .id(mediaItem.id)
+                                        .scaledToFit()
+                                        .tag(index)
+                                }
                             }
                         }
+                        .tabViewStyle(.page(indexDisplayMode: .always))
+                        .frame(maxHeight: 500)
+
+                        // Mute button for videos
+                        if isCurrentMediaVideo, let mediaItem = currentMediaItem {
+                            MuteButton(videoId: mediaItem.id, isMuted: isMuted)
+                                .padding(16)
+                        }
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .always))
-                    .frame(maxHeight: 500)
                 }
 
                 // Moment details
@@ -118,6 +141,16 @@ struct ExpandedMomentView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
             }
+        }
+        .onAppear {
+            // Mute all canvas videos when expanded view opens
+            audioManager.isExpandedViewActive = true
+            audioManager.stopAllAudio()
+        }
+        .onDisappear {
+            // Re-enable canvas video audio when expanded view closes
+            audioManager.isExpandedViewActive = false
+            audioManager.stopAllAudio()
         }
         .sheet(isPresented: $showingEditMoment) {
             if let trip = tripStore.trips.first(where: { $0.id == tripId }) {

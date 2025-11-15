@@ -146,6 +146,7 @@ class TripStore: ObservableObject {
                         imageURL: mediaItem.imageURL?.absoluteString,
                         videoURL: mediaItem.videoURL?.absoluteString,
                         storageId: mediaItem.storageId,
+                        thumbnailStorageId: mediaItem.thumbnailStorageId,
                         type: mediaItem.type.rawValue,
                         captureDate: mediaItem.captureDate,
                         note: mediaItem.note,

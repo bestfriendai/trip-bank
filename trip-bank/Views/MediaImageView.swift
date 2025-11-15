@@ -61,8 +61,16 @@ struct MediaImageView: View {
             return
         }
 
+        // For videos, try to load thumbnail first
+        let storageIdToLoad: String?
+        if mediaItem.type == .video {
+            storageIdToLoad = mediaItem.thumbnailStorageId ?? mediaItem.storageId
+        } else {
+            storageIdToLoad = mediaItem.storageId
+        }
+
         // Try to load from Convex storage
-        guard let storageId = mediaItem.storageId, !storageId.isEmpty else {
+        guard let storageId = storageIdToLoad, !storageId.isEmpty else {
             return
         }
 

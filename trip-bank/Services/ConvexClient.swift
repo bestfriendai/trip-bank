@@ -307,7 +307,7 @@ class ConvexClient {
 
     // MARK: - Media Item Mutations
 
-    func addMediaItem(id: String, tripId: String, imageURL: String? = nil, videoURL: String? = nil, storageId: String? = nil, type: String, captureDate: Date? = nil, note: String? = nil, timestamp: Date) async throws -> String {
+    func addMediaItem(id: String, tripId: String, imageURL: String? = nil, videoURL: String? = nil, storageId: String? = nil, thumbnailStorageId: String? = nil, type: String, captureDate: Date? = nil, note: String? = nil, timestamp: Date) async throws -> String {
         var args: [String: Any] = [
             "mediaItemId": id,
             "tripId": tripId,
@@ -323,6 +323,9 @@ class ConvexClient {
         }
         if let storageId = storageId {
             args["storageId"] = storageId
+        }
+        if let thumbnailStorageId = thumbnailStorageId {
+            args["thumbnailStorageId"] = thumbnailStorageId
         }
         if let captureDate = captureDate {
             args["captureDate"] = captureDate.timeIntervalSince1970 * 1000
