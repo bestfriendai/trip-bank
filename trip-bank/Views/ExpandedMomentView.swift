@@ -12,6 +12,7 @@ struct ExpandedMomentView: View {
     @State private var showingEditMoment = false
     @State private var showingDeleteConfirmation = false
     @State private var isNoteExpanded = false
+    @State private var isZoomed = false
     @StateObject private var audioManager = VideoAudioManager.shared
 
     private var currentMediaItem: MediaItem? {
@@ -37,6 +38,7 @@ struct ExpandedMomentView: View {
         return moment // fallback to original
     }
 
+
     var body: some View {
         ZStack {
             // Full-screen media background
@@ -44,22 +46,27 @@ struct ExpandedMomentView: View {
                 TabView(selection: $currentPhotoIndex) {
                     ForEach(mediaItems.indices, id: \.self) { index in
                         let mediaItem = mediaItems[index]
-                        ZStack {
+                        ZoomableScrollView(isZoomed: $isZoomed) {
                             if mediaItem.type == .video {
                                 MediaVideoView(mediaItem: mediaItem, isInExpandedView: true)
                                     .id(mediaItem.id)
-                                    .scaledToFill()
+                                    .scaledToFit()
                             } else {
                                 MediaImageView(mediaItem: mediaItem)
                                     .id(mediaItem.id)
-                                    .scaledToFill()
+                                    .scaledToFit()
                             }
                         }
                         .tag(index)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
+                .scrollDisabled(isZoomed) // Disable swiping when zoomed
                 .ignoresSafeArea()
+                .onChange(of: currentPhotoIndex) { _, _ in
+                    // Reset zoom when changing photos
+                    isZoomed = false
+                }
             }
 
             // Custom page indicators (more visible)
