@@ -61,8 +61,9 @@ struct ExpandedMomentView: View {
                     TabView(selection: $currentPhotoIndex) {
                         ForEach(mediaItems.indices, id: \.self) { index in
                             let mediaItem = mediaItems[index]
-                            if mediaItem.type == .video, let videoURL = mediaItem.videoURL {
-                                AutoPlayVideoView(videoURL: videoURL)
+                            if mediaItem.type == .video {
+                                MediaVideoView(mediaItem: mediaItem)
+                                    .id(mediaItem.id)
                                     .scaledToFit()
                                     .tag(index)
                             } else {

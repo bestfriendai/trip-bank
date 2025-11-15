@@ -92,8 +92,9 @@ struct MomentCardView: View {
 
     @ViewBuilder
     private func singleMediaView(_ mediaItem: MediaItem) -> some View {
-        if mediaItem.type == .video, let videoURL = mediaItem.videoURL {
-            AutoPlayVideoView(videoURL: videoURL)
+        if mediaItem.type == .video {
+            MediaVideoView(mediaItem: mediaItem)
+                .id(mediaItem.id)
                 .frame(width: size.width, height: size.height)
         } else {
             MediaImageView(mediaItem: mediaItem)
@@ -139,8 +140,9 @@ struct MomentCardView: View {
         let validWidth = max(1, width)
         let validHeight = max(1, height)
 
-        if mediaItem.type == .video, let videoURL = mediaItem.videoURL {
-            AutoPlayVideoView(videoURL: videoURL)
+        if mediaItem.type == .video {
+            CollageMediaVideoView(mediaItem: mediaItem)
+                .id(mediaItem.id)
                 .frame(width: validWidth, height: validHeight)
                 .clipped()
         } else {

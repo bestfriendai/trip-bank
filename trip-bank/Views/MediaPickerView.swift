@@ -1,76 +1,72 @@
 import SwiftUI
-import PhotosUI
+
+enum MediaPickerState {
+    case selectingFromLibrary
+    case loadingMedia(count: Int)
+    case previewing([SelectedMediaItem])
+    case uploading(current: Int, total: Int)
+    case error(String)
+}
 
 struct MediaPickerView: View {
     let trip: Trip
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var tripStore: TripStore
 
-    @State private var selectedItems: [PhotosPickerItem] = []
-    @State private var selectedImages: [UIImage] = []
-    @State private var isUploading = false
-    @State private var uploadProgress: Double = 0
+    @State private var state: MediaPickerState = .selectingFromLibrary
 
     var body: some View {
         NavigationStack {
             VStack {
-                PhotosPicker(
-                    selection: $selectedItems,
-                    maxSelectionCount: 10,
-                    matching: .any(of: [.images, .videos])
-                ) {
+                switch state {
+                case .selectingFromLibrary:
+                    PHPickerView { result in
+                        handlePickerResult(result)
+                    }
+
+                case .loadingMedia(let count):
                     VStack(spacing: 16) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 50))
-                            .foregroundStyle(.blue)
-
-                        Text("Select Photos & Videos")
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text("Loading \(count) item(s)...")
                             .font(.headline)
-
-                        Text("Choose up to 10 items")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .onChange(of: selectedItems) { oldValue, newValue in
-                    Task {
-                        await loadImages()
-                    }
-                }
 
-                if !selectedImages.isEmpty {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 12) {
-                            ForEach(selectedImages.indices, id: \.self) { index in
-                                Image(uiImage: selectedImages[index])
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 100, height: 100)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
+                case .previewing(let media):
+                    PreviewView(media: media) {
+                        Task {
+                            await uploadMedia(media)
                         }
-                        .padding()
+                    } onSelectDifferent: {
+                        state = .selectingFromLibrary
                     }
 
-                    if isUploading {
-                        VStack(spacing: 8) {
-                            ProgressView(value: uploadProgress, total: Double(selectedImages.count))
-                                .padding(.horizontal)
-                            Text("Uploading \(Int(uploadProgress)) of \(selectedImages.count) images...")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding()
-                    } else {
-                        Button("Add to Trip") {
-                            Task {
-                                await addMediaToTrip()
-                            }
+                case .uploading(let current, let total):
+                    VStack(spacing: 16) {
+                        ProgressView(value: Double(current), total: Double(total))
+                            .padding(.horizontal)
+                        Text("Uploading \(current)/\(total)...")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                case .error(let message):
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 50))
+                            .foregroundStyle(.red)
+                        Text("Upload Failed")
+                            .font(.headline)
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Try Again") {
+                            state = .selectingFromLibrary
                         }
                         .buttonStyle(.borderedProminent)
-                        .padding()
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .navigationTitle("Add Media")
@@ -85,51 +81,104 @@ struct MediaPickerView: View {
         }
     }
 
-    private func loadImages() async {
-        selectedImages = []
+    private func handlePickerResult(_ result: MediaPickerResult) {
+        switch result {
+        case .cancelled:
+            dismiss()
 
-        for item in selectedItems {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
-                selectedImages.append(image)
-            }
+        case .loading(let count):
+            state = .loadingMedia(count: count)
+
+        case .loaded(let media):
+            state = .previewing(media)
         }
     }
 
-    private func addMediaToTrip() async {
-        isUploading = true
-        uploadProgress = 0
-
+    private func uploadMedia(_ media: [SelectedMediaItem]) async {
         let convexClient = ConvexClient.shared
         var newMediaItems: [MediaItem] = []
 
-        for (index, image) in selectedImages.enumerated() {
+        for (index, item) in media.enumerated() {
+            state = .uploading(current: index, total: media.count)
+
             do {
-                // Upload image to Convex storage
-                let storageId = try await convexClient.uploadImage(image)
+                let storageId: String
+                let mediaType: MediaType
 
-                // Create MediaItem with storage ID
-                let mediaItem = MediaItem(
+                if item.isVideo, let videoURL = item.videoURL {
+                    storageId = try await convexClient.uploadVideo(videoURL)
+                    mediaType = .video
+                } else if let image = item.image {
+                    storageId = try await convexClient.uploadImage(image)
+                    mediaType = .photo
+                } else {
+                    continue
+                }
+
+                newMediaItems.append(MediaItem(
                     storageId: storageId,
-                    type: .photo,
+                    type: mediaType,
                     captureDate: Date()
-                )
-
-                newMediaItems.append(mediaItem)
-
-                // Update progress
-                uploadProgress = Double(index + 1)
+                ))
             } catch {
-                print("❌ Failed to upload image: \(error)")
-                // Continue with other images even if one fails
+                state = .error(error.localizedDescription)
+                return
             }
         }
 
-        // Add to trip
-        tripStore.addMediaItems(to: trip.id, mediaItems: newMediaItems)
+        if !newMediaItems.isEmpty {
+            tripStore.addMediaItems(to: trip.id, mediaItems: newMediaItems)
+        }
 
-        isUploading = false
         dismiss()
+    }
+}
+
+// Preview subview
+struct PreviewView: View {
+    let media: [SelectedMediaItem]
+    let onUpload: () -> Void
+    let onSelectDifferent: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            ScrollView(.horizontal) {
+                HStack(spacing: 12) {
+                    ForEach(media.indices, id: \.self) { index in
+                        ZStack(alignment: .bottomTrailing) {
+                            if let image = media[index].image {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 100, height: 100)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+
+                            if media[index].isVideo {
+                                Image(systemName: "play.circle.fill")
+                                    .foregroundStyle(.white)
+                                    .font(.title2)
+                                    .shadow(radius: 2)
+                                    .padding(4)
+                            }
+                        }
+                    }
+                }
+                .padding()
+            }
+
+            Button("Add \(media.count) to Trip") {
+                onUpload()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+
+            Button("Select Different Items") {
+                onSelectDifferent()
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

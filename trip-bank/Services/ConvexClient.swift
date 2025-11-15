@@ -216,6 +216,38 @@ class ConvexClient {
         return uploadResponse.storageId
     }
 
+    /// Upload a video to Convex storage
+    func uploadVideo(_ videoURL: URL) async throws -> String {
+        // 1. Read video data
+        guard let videoData = try? Data(contentsOf: videoURL) else {
+            throw ConvexError.convexError(message: "Failed to read video file")
+        }
+
+        // 2. Generate upload URL
+        let uploadUrl = try await generateUploadUrl()
+
+        // 3. Upload the file
+        guard let url = URL(string: uploadUrl) else {
+            throw ConvexError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("video/mp4", forHTTPHeaderField: "Content-Type")
+        request.httpBody = videoData
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw ConvexError.convexError(message: "Failed to upload video")
+        }
+
+        // 4. Parse response to get storage ID
+        let uploadResponse = try JSONDecoder().decode(UploadResponse.self, from: data)
+        return uploadResponse.storageId
+    }
+
     /// Get download URL for a stored file (with caching)
     func getFileUrl(storageId: String) async throws -> String {
         // Check cache first
