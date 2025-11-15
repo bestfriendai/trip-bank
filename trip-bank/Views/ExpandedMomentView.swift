@@ -11,6 +11,7 @@ struct ExpandedMomentView: View {
     @State private var currentPhotoIndex = 0
     @State private var showingEditMoment = false
     @State private var showingDeleteConfirmation = false
+    @State private var isNoteExpanded = false
     @StateObject private var audioManager = VideoAudioManager.shared
 
     private var currentMediaItem: MediaItem? {
@@ -27,14 +28,59 @@ struct ExpandedMomentView: View {
         return !audioManager.isPlaying(videoId: mediaItem.id)
     }
 
-    var body: some View {
-        ZStack(alignment: .top) {
-            // Background
-            Color.black.opacity(0.95)
-                .ignoresSafeArea()
+    // Get the latest version of the moment from the store
+    private var currentMoment: Moment {
+        if let trip = tripStore.trips.first(where: { $0.id == tripId }),
+           let latestMoment = trip.moments.first(where: { $0.id == moment.id }) {
+            return latestMoment
+        }
+        return moment // fallback to original
+    }
 
-            VStack(spacing: 0) {
-                // Top bar with close and menu buttons
+    var body: some View {
+        ZStack {
+            // Full-screen media background
+            if !mediaItems.isEmpty {
+                TabView(selection: $currentPhotoIndex) {
+                    ForEach(mediaItems.indices, id: \.self) { index in
+                        let mediaItem = mediaItems[index]
+                        ZStack {
+                            if mediaItem.type == .video {
+                                MediaVideoView(mediaItem: mediaItem, isInExpandedView: true)
+                                    .id(mediaItem.id)
+                                    .scaledToFill()
+                            } else {
+                                MediaImageView(mediaItem: mediaItem)
+                                    .id(mediaItem.id)
+                                    .scaledToFill()
+                            }
+                        }
+                        .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .ignoresSafeArea()
+            }
+
+            // Custom page indicators (more visible)
+            if mediaItems.count > 1 {
+                VStack {
+                    HStack(spacing: 8) {
+                        ForEach(0..<mediaItems.count, id: \.self) { index in
+                            Circle()
+                                .fill(index == currentPhotoIndex ? Color.white : Color.white.opacity(0.5))
+                                .frame(width: 8, height: 8)
+                                .shadow(color: .black.opacity(0.3), radius: 2)
+                        }
+                    }
+                    .padding(.top, 16)
+
+                    Spacer()
+                }
+            }
+
+            // Top controls overlay
+            VStack {
                 HStack {
                     Menu {
                         Button {
@@ -53,7 +99,8 @@ struct ExpandedMomentView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle.fill")
                             .font(.system(size: 32))
-                            .foregroundStyle(.white.opacity(0.9))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                             .padding()
                     }
 
@@ -66,77 +113,104 @@ struct ExpandedMomentView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 32))
-                            .foregroundStyle(.white.opacity(0.9))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                             .padding()
                     }
                 }
+                .padding(.top, 8)
 
-                // Media carousel (photos and videos)
-                if !mediaItems.isEmpty {
-                    ZStack(alignment: .bottomTrailing) {
-                        TabView(selection: $currentPhotoIndex) {
-                            ForEach(mediaItems.indices, id: \.self) { index in
-                                let mediaItem = mediaItems[index]
-                                if mediaItem.type == .video {
-                                    MediaVideoView(mediaItem: mediaItem, isInExpandedView: true)
-                                        .id(mediaItem.id)
-                                        .scaledToFit()
-                                        .tag(index)
-                                } else {
-                                    MediaImageView(mediaItem: mediaItem)
-                                        .id(mediaItem.id)
-                                        .scaledToFit()
-                                        .tag(index)
+                Spacer()
+            }
+
+            // Bottom content overlay with gradient
+            VStack {
+                Spacer()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    // Title
+                    Text(currentMoment.title)
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+
+                    // Metadata
+                    HStack(spacing: 16) {
+                        if let placeName = currentMoment.placeName {
+                            Label(placeName, systemImage: "mappin.circle.fill")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.95))
+                        }
+
+                        if let date = currentMoment.date {
+                            Label(formatDate(date), systemImage: "calendar")
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.95))
+                        }
+                    }
+                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+
+                    // Note
+                    if let note = currentMoment.note, !note.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(note)
+                                .font(.body)
+                                .foregroundStyle(.white.opacity(0.9))
+                                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                                .lineLimit(isNoteExpanded ? nil : 3)
+                                .padding(.top, 4)
+
+                            // Show "more/less" button if text is long
+                            if note.count > 100 {
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.3)) {
+                                        isNoteExpanded.toggle()
+                                    }
+                                }) {
+                                    Text(isNoteExpanded ? "Show less" : "Read more")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white.opacity(0.7))
                                 }
                             }
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .always))
-                        .frame(maxHeight: 500)
-
-                        // Mute button for videos
-                        if isCurrentMediaVideo, let mediaItem = currentMediaItem {
-                            MuteButton(videoId: mediaItem.id, isMuted: isMuted)
-                                .padding(16)
-                        }
                     }
-                }
-
-                // Moment details
-                VStack(alignment: .leading, spacing: 16) {
-                    // Title
-                    Text(moment.title)
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.white)
-
-                    // Metadata
-                    VStack(alignment: .leading, spacing: 8) {
-                        if let placeName = moment.placeName {
-                            Label(placeName, systemImage: "mappin.circle.fill")
-                                .foregroundStyle(.white.opacity(0.9))
-                        }
-
-                        if let date = moment.date {
-                            Label(formatDate(date), systemImage: "calendar")
-                                .foregroundStyle(.white.opacity(0.9))
-                        }
-                    }
-                    .font(.subheadline)
-
-                    // Note
-                    if let note = moment.note {
-                        Text(note)
-                            .font(.body)
-                            .foregroundStyle(.white.opacity(0.85))
-                            .padding(.top, 8)
-                    }
-
-                    Spacer()
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 16)
+                .padding(.bottom, 40)
+                .padding(.top, 80)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            .black.opacity(0.4),
+                            .black.opacity(0.7),
+                            .black.opacity(0.85)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .ignoresSafeArea(edges: .bottom)
+                )
+            }
+
+            // Mute button for videos (bottom right)
+            if isCurrentMediaVideo, let mediaItem = currentMediaItem {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        MuteButton(videoId: mediaItem.id, isMuted: isMuted)
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 40)
+                    }
+                }
             }
         }
+        .background(Color.black.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
         .onAppear {
             // Mute all canvas videos when expanded view opens
             audioManager.isExpandedViewActive = true
@@ -149,7 +223,7 @@ struct ExpandedMomentView: View {
         }
         .sheet(isPresented: $showingEditMoment) {
             if let trip = tripStore.trips.first(where: { $0.id == tripId }) {
-                CreateMomentView(trip: trip, moment: moment)
+                CreateMomentView(trip: trip, moment: currentMoment)
             }
         }
         .alert("Delete Moment?", isPresented: $showingDeleteConfirmation) {
@@ -160,7 +234,6 @@ struct ExpandedMomentView: View {
         } message: {
             Text("This will permanently delete this moment. The photos will remain in your trip.")
         }
-        .transition(.scale.combined(with: .opacity))
     }
 
     private func deleteMoment() {
@@ -170,8 +243,8 @@ struct ExpandedMomentView: View {
 
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateStyle = .long
-        formatter.timeStyle = .short
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
         return formatter.string(from: date)
     }
 }

@@ -112,6 +112,7 @@ struct TripCanvasView: View {
                 }
             }
         }
+        .toolbar(showingExpandedMoment ? .hidden : .visible, for: .navigationBar)
         .overlay {
             if showingExpandedMoment, let moment = selectedMoment {
                 ExpandedMomentView(
