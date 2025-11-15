@@ -116,11 +116,6 @@ struct ExpandedMomentView: View {
                                 .foregroundStyle(.white.opacity(0.9))
                         }
 
-                        if let eventName = moment.eventName {
-                            Label(eventName, systemImage: "star.fill")
-                                .foregroundStyle(.white.opacity(0.9))
-                        }
-
                         if let date = moment.date {
                             Label(formatDate(date), systemImage: "calendar")
                                 .foregroundStyle(.white.opacity(0.9))

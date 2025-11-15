@@ -361,7 +361,7 @@ class ConvexClient {
 
     // MARK: - Moment Mutations
 
-    func addMoment(id: String, tripId: String, title: String, note: String? = nil, mediaItemIDs: [String], timestamp: Date, date: Date? = nil, placeName: String? = nil, eventName: String? = nil, voiceNoteURL: String? = nil, gridPosition: GridPosition) async throws -> String {
+    func addMoment(id: String, tripId: String, title: String, note: String? = nil, mediaItemIDs: [String], timestamp: Date, date: Date? = nil, placeName: String? = nil, voiceNoteURL: String? = nil, gridPosition: GridPosition) async throws -> String {
         var args: [String: Any] = [
             "momentId": id,
             "tripId": tripId,
@@ -385,9 +385,6 @@ class ConvexClient {
         if let placeName = placeName {
             args["placeName"] = placeName
         }
-        if let eventName = eventName {
-            args["eventName"] = eventName
-        }
         if let voiceNoteURL = voiceNoteURL {
             args["voiceNoteURL"] = voiceNoteURL
         }
@@ -395,7 +392,7 @@ class ConvexClient {
         return try await callMutation("trips:addMoment", args: args)
     }
 
-    func updateMoment(id: String, title: String? = nil, note: String? = nil, mediaItemIDs: [String]? = nil, date: Date? = nil, placeName: String? = nil, eventName: String? = nil) async throws -> DeleteResponse {
+    func updateMoment(id: String, title: String? = nil, note: String? = nil, mediaItemIDs: [String]? = nil, date: Date? = nil, placeName: String? = nil) async throws -> DeleteResponse {
         var args: [String: Any] = [
             "momentId": id
         ]
@@ -414,9 +411,6 @@ class ConvexClient {
         }
         if let placeName = placeName {
             args["placeName"] = placeName
-        }
-        if let eventName = eventName {
-            args["eventName"] = eventName
         }
 
         return try await callMutation("trips:updateMoment", args: args)
@@ -526,6 +520,7 @@ struct ConvexMediaItem: Decodable {
     let mediaItemId: String
     let tripId: String
     let storageId: String?
+    let thumbnailStorageId: String?
     let imageURL: String?
     let videoURL: String?
     let type: String
@@ -547,7 +542,6 @@ struct ConvexMoment: Decodable {
     let timestamp: Double
     let date: Double?
     let placeName: String?
-    let eventName: String?
     let voiceNoteURL: String?
     let gridPosition: GridPositionDTO
     let createdAt: Double
@@ -618,6 +612,7 @@ extension ConvexMediaItem {
         return MediaItem(
             id: UUID(uuidString: mediaItemId) ?? UUID(),
             storageId: storageId,
+            thumbnailStorageId: thumbnailStorageId,
             imageURL: imageURL.flatMap { URL(string: $0) },
             videoURL: videoURL.flatMap { URL(string: $0) },
             type: type == "video" ? .video : .photo,
@@ -645,7 +640,6 @@ extension ConvexMoment {
             timestamp: Date(timeIntervalSince1970: timestamp / 1000),
             date: date.map { Date(timeIntervalSince1970: $0 / 1000) },
             placeName: placeName,
-            eventName: eventName,
             voiceNoteURL: voiceNoteURL,
             gridPosition: gridPos
         )

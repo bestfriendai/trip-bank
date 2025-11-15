@@ -11,7 +11,6 @@ struct CreateMomentView: View {
     @State private var title = ""
     @State private var note = ""
     @State private var placeName = ""
-    @State private var eventName = ""
     @State private var date = Date()
     @State private var momentWidth: Double = 1
     @State private var momentHeight: Double = 1.5
@@ -27,7 +26,6 @@ struct CreateMomentView: View {
                 Section("Moment Details") {
                     TextField("Title (e.g., Sunset at the beach)", text: $title)
                     TextField("Place name", text: $placeName)
-                    TextField("Event name (optional)", text: $eventName)
                     DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                 }
 
@@ -82,7 +80,6 @@ struct CreateMomentView: View {
                     title = moment.title
                     note = moment.note ?? ""
                     placeName = moment.placeName ?? ""
-                    eventName = moment.eventName ?? ""
                     date = moment.date ?? Date()
                     momentWidth = Double(moment.gridPosition.width)
                     momentHeight = moment.gridPosition.height
@@ -128,7 +125,6 @@ struct CreateMomentView: View {
             mediaItemIDs: Array(selectedMediaItems),
             date: date,
             placeName: placeName.isEmpty ? nil : placeName,
-            eventName: eventName.isEmpty ? nil : eventName,
             gridPosition: gridPosition
         )
 
@@ -145,7 +141,6 @@ struct CreateMomentView: View {
         updatedMoment.mediaItemIDs = Array(selectedMediaItems)
         updatedMoment.date = date
         updatedMoment.placeName = placeName.isEmpty ? nil : placeName
-        updatedMoment.eventName = eventName.isEmpty ? nil : eventName
 
         // Update grid position size
         updatedMoment.gridPosition.width = Int(momentWidth)

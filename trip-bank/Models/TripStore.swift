@@ -186,7 +186,6 @@ class TripStore: ObservableObject {
                     timestamp: moment.timestamp,
                     date: moment.date,
                     placeName: moment.placeName,
-                    eventName: moment.eventName,
                     voiceNoteURL: moment.voiceNoteURL,
                     gridPosition: moment.gridPosition
                 )
@@ -212,8 +211,7 @@ class TripStore: ObservableObject {
                     note: moment.note,
                     mediaItemIDs: moment.mediaItemIDs.map { $0.uuidString },
                     date: moment.date,
-                    placeName: moment.placeName,
-                    eventName: moment.eventName
+                    placeName: moment.placeName
                 )
 
                 // Update local state

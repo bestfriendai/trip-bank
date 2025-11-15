@@ -64,7 +64,6 @@ export default defineSchema({
     // Enhanced metadata
     date: v.optional(v.number()), // Timestamp
     placeName: v.optional(v.string()),
-    eventName: v.optional(v.string()),
     voiceNoteURL: v.optional(v.string()),
 
     // Visual layout properties

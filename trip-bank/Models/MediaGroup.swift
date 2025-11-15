@@ -12,7 +12,6 @@ struct Moment: Identifiable, Codable {
     // Enhanced metadata from prompt requirements
     var date: Date? // When this moment happened
     var placeName: String? // "Golden Gate Bridge", "Louvre Museum"
-    var eventName: String? // "Birthday celebration", "Wedding ceremony"
     var voiceNoteURL: String? // Path to audio file (future feature)
 
     // Visual layout properties for spatial canvas
@@ -25,7 +24,6 @@ struct Moment: Identifiable, Codable {
          timestamp: Date = Date(),
          date: Date? = nil,
          placeName: String? = nil,
-         eventName: String? = nil,
          voiceNoteURL: String? = nil,
          gridPosition: GridPosition) {
         self.id = id
@@ -35,7 +33,6 @@ struct Moment: Identifiable, Codable {
         self.timestamp = timestamp
         self.date = date
         self.placeName = placeName
-        self.eventName = eventName
         self.voiceNoteURL = voiceNoteURL
         self.gridPosition = gridPosition
     }
