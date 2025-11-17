@@ -9,6 +9,9 @@ struct TripCanvasView: View {
     @State private var canvasSize: CGSize = .zero
     @State private var appearingMoments: Set<UUID> = []
 
+    // Permissions
+    @State private var canEdit = false
+
     // Drag state
     @State private var draggingMoment: UUID?
     @State private var dragOffset: CGSize = .zero
@@ -87,6 +90,10 @@ struct TripCanvasView: View {
             }
             .scrollDisabled(draggingMoment != nil)
             .onAppear {
+                // Check permissions when view appears
+                canEdit = tripStore.canEdit(trip: trip)
+
+                // Canvas size setup
                 if geometry.size.width > 0 && geometry.size.height > 0 {
                     canvasSize = geometry.size
                 }
@@ -261,22 +268,24 @@ struct TripCanvasView: View {
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.5)
                 .onEnded { _ in
+                    guard canEdit else { return }
                     startDragging(moment, at: layout.position)
                 }
         )
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
-                    guard draggingMoment == moment.id else { return }
+                    guard canEdit, draggingMoment == moment.id else { return }
                     handleDragChanged(value, for: moment, at: layout.position)
                 }
                 .onEnded { value in
-                    guard draggingMoment == moment.id else { return }
+                    guard canEdit, draggingMoment == moment.id else { return }
                     handleDragEnd(value, for: moment)
                 }
         )
         .onTapGesture(count: 2) {
-            // Double-tap to resize
+            // Double-tap to resize (only if user can edit)
+            guard canEdit else { return }
             resizingMoment = moment
             previewWidth = Double(moment.gridPosition.width)
             previewHeight = moment.gridPosition.height

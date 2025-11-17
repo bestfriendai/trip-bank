@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Clerk
 
 @MainActor
 class TripStore: ObservableObject {
@@ -8,6 +9,12 @@ class TripStore: ObservableObject {
     @Published var errorMessage: String?
 
     private let convexClient = ConvexClient.shared
+
+    // MARK: - Current User
+
+    private var currentUserId: String? {
+        return Clerk.shared.user?.id
+    }
 
     init() {
         // Load trips from Convex backend
@@ -42,7 +49,14 @@ class TripStore: ObservableObject {
                         coverImageName: convexTrip.coverImageName,
                         coverImageStorageId: convexTrip.coverImageStorageId,
                         mediaItems: mediaItems,
-                        moments: moments
+                        moments: moments,
+                        ownerId: tripDetails.trip.ownerId,
+                        shareSlug: tripDetails.trip.shareSlug,
+                        shareCode: tripDetails.trip.shareCode,
+                        shareLinkEnabled: tripDetails.trip.shareLinkEnabled ?? false,
+                        permissions: [],
+                        userRole: tripDetails.trip.userRole,
+                        joinedAt: convexTrip.joinedAt
                     )
                     loadedTrips.append(trip)
                 }
@@ -300,6 +314,46 @@ class TripStore: ObservableObject {
                 print("Error updating media item: \(error)")
             }
         }
+    }
+
+    // MARK: - Permissions
+
+    /// Check if current user can view a trip
+    func canView(trip: Trip) -> Bool {
+        guard let userId = currentUserId else { return false }
+
+        // Owner can view
+        if trip.ownerId == userId { return true }
+
+        // Check permissions
+        return trip.permissions.contains { $0.userId == userId }
+    }
+
+    /// Check if current user can edit a trip (add/modify/delete content)
+    func canEdit(trip: Trip) -> Bool {
+        guard let userId = currentUserId else { return false }
+
+        // Owner can edit
+        if trip.ownerId == userId { return true }
+
+        // Collaborators can edit
+        return trip.permissions.contains {
+            $0.userId == userId && $0.role == .collaborator
+        }
+    }
+
+    /// Check if current user can manage access (invite users, change permissions)
+    func canManageAccess(trip: Trip) -> Bool {
+        guard let userId = currentUserId else { return false }
+
+        // Only owner can manage access
+        return trip.ownerId == userId
+    }
+
+    /// Check if current user is the owner of a trip
+    func isOwner(trip: Trip) -> Bool {
+        guard let userId = currentUserId else { return false }
+        return trip.ownerId == userId
     }
 
 }

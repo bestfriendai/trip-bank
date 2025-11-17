@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as files from "../files.js";
+import type * as migrations from "../migrations.js";
 import type * as trips from "../trips.js";
 
 import type {
@@ -21,6 +22,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   files: typeof files;
+  migrations: typeof migrations;
   trips: typeof trips;
 }>;
 

@@ -11,6 +11,16 @@ struct Trip: Identifiable, Codable {
     var mediaItems: [MediaItem]
     var moments: [Moment]
 
+    // Sharing fields
+    var ownerId: String? // Clerk user ID of the owner
+    var shareSlug: String? // URL-safe slug for sharing
+    var shareCode: String? // Human-readable code
+    var shareLinkEnabled: Bool // Can people join via link?
+    var previewImageStorageId: String? // Preview snapshot
+    var permissions: [TripPermission] // Who has access to this trip
+    var userRole: String? // Current user's role in this trip (for shared trips)
+    var joinedAt: Double? // Timestamp when user joined (for shared trips)
+
     init(id: UUID = UUID(),
          title: String,
          startDate: Date = Date(),
@@ -18,7 +28,15 @@ struct Trip: Identifiable, Codable {
          coverImageName: String? = nil,
          coverImageStorageId: String? = nil,
          mediaItems: [MediaItem] = [],
-         moments: [Moment] = []) {
+         moments: [Moment] = [],
+         ownerId: String? = nil,
+         shareSlug: String? = nil,
+         shareCode: String? = nil,
+         shareLinkEnabled: Bool = false,
+         previewImageStorageId: String? = nil,
+         permissions: [TripPermission] = [],
+         userRole: String? = nil,
+         joinedAt: Double? = nil) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -27,6 +45,14 @@ struct Trip: Identifiable, Codable {
         self.coverImageStorageId = coverImageStorageId
         self.mediaItems = mediaItems
         self.moments = moments
+        self.ownerId = ownerId
+        self.shareSlug = shareSlug
+        self.shareCode = shareCode
+        self.shareLinkEnabled = shareLinkEnabled
+        self.previewImageStorageId = previewImageStorageId
+        self.permissions = permissions
+        self.userRole = userRole
+        self.joinedAt = joinedAt
     }
 
     var dateRangeString: String {

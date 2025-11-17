@@ -9,6 +9,7 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>webcredentials:magical-labrador-17.clerk.accounts.dev</string>
+		<string>applinks:rewinded.app</string>
 	</array>
 </dict>
 </plist>

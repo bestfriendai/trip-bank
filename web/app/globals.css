@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ios-blue: #007AFF;
+  --color-ios-gray: #8E8E93;
+  --color-ios-lightgray: #F2F2F7;
+
+  --radius-ios: 12px;
+  --radius-ios-lg: 16px;
+
+  --font-family-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', sans-serif;
+}
+
+body {
+  font-family: var(--font-family-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "YHKHX97TXN.com.gabeliss.trip-bank",
+        "paths": ["/trip/*"]
+      }
+    ]
+  }
+}

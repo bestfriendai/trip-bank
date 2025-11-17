@@ -15,6 +15,9 @@ struct ExpandedMomentView: View {
     @State private var isZoomed = false
     @StateObject private var audioManager = VideoAudioManager.shared
 
+    // Permissions
+    @State private var canEdit = false
+
     private var currentMediaItem: MediaItem? {
         guard !mediaItems.isEmpty, currentPhotoIndex < mediaItems.count else { return nil }
         return mediaItems[currentPhotoIndex]
@@ -89,26 +92,29 @@ struct ExpandedMomentView: View {
             // Top controls overlay
             VStack {
                 HStack {
-                    Menu {
-                        Button {
-                            showingEditMoment = true
-                        } label: {
-                            Label("Edit Moment", systemImage: "pencil")
-                        }
+                    // Only show edit menu if user can edit
+                    if canEdit {
+                        Menu {
+                            Button {
+                                showingEditMoment = true
+                            } label: {
+                                Label("Edit Moment", systemImage: "pencil")
+                            }
 
-                        Divider()
+                            Divider()
 
-                        Button(role: .destructive) {
-                            showingDeleteConfirmation = true
+                            Button(role: .destructive) {
+                                showingDeleteConfirmation = true
+                            } label: {
+                                Label("Delete Moment", systemImage: "trash")
+                            }
                         } label: {
-                            Label("Delete Moment", systemImage: "trash")
+                            Image(systemName: "ellipsis.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundStyle(.white)
+                                .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                                .padding()
                         }
-                    } label: {
-                        Image(systemName: "ellipsis.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                            .padding()
                     }
 
                     Spacer()
@@ -219,6 +225,12 @@ struct ExpandedMomentView: View {
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .onAppear {
+            // Check permissions when view appears
+            if let trip = tripStore.trips.first(where: { $0.id == tripId }) {
+                canEdit = tripStore.canEdit(trip: trip)
+            }
+
+            // Video audio management
             // Mute all canvas videos when expanded view opens
             audioManager.isExpandedViewActive = true
             audioManager.stopAllAudio()

@@ -13,7 +13,8 @@ export default defineSchema({
 
   trips: defineTable({
     // Core fields
-    userId: v.string(), // Owner of the trip
+    userId: v.string(), // DEPRECATED - use ownerId instead (keep for migration)
+    ownerId: v.optional(v.string()), // Trip owner (optional for migration)
     tripId: v.string(), // UUID from Swift
     title: v.string(),
     startDate: v.number(), // Timestamp
@@ -21,13 +22,22 @@ export default defineSchema({
     coverImageName: v.optional(v.string()),
     coverImageStorageId: v.optional(v.id("_storage")), // Convex file storage
 
+    // Sharing fields
+    shareSlug: v.optional(v.string()), // URL-safe slug: "paris-2024-xl8k"
+    shareCode: v.optional(v.string()), // Human-readable code: "PARIS24"
+    shareLinkEnabled: v.optional(v.boolean()), // Can people join via link?
+    previewImageStorageId: v.optional(v.id("_storage")), // Preview snapshot
+
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_tripId", ["tripId"])
     .index("by_userId", ["userId"])
-    .index("by_userId_createdAt", ["userId", "createdAt"]),
+    .index("by_userId_createdAt", ["userId", "createdAt"])
+    .index("by_ownerId", ["ownerId"])
+    .index("by_shareSlug", ["shareSlug"])
+    .index("by_shareCode", ["shareCode"]),
 
   mediaItems: defineTable({
     // Core fields
@@ -81,4 +91,25 @@ export default defineSchema({
     .index("by_tripId", ["tripId"])
     .index("by_momentId", ["momentId"])
     .index("by_userId", ["userId"]),
+
+  // Trip permissions for sharing & collaboration
+  tripPermissions: defineTable({
+    tripId: v.string(), // Foreign key to trips
+    userId: v.string(), // Who has access (from users.clerkId)
+    role: v.union(
+      v.literal("owner"),
+      v.literal("collaborator"),
+      v.literal("viewer")
+    ),
+    grantedVia: v.union(
+      v.literal("share_link"),
+      v.literal("upgraded")
+    ),
+    invitedBy: v.string(), // userId who shared/upgraded
+    acceptedAt: v.number(), // When user joined
+    createdAt: v.number(),
+  })
+    .index("by_tripId", ["tripId"])
+    .index("by_userId", ["userId"])
+    .index("by_tripId_userId", ["tripId", "userId"]),
 });

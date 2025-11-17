@@ -458,6 +458,61 @@ class ConvexClient {
 
         return try await callMutation("trips:batchUpdateMomentGridPositions", args: args)
     }
+
+    // MARK: - Sharing Mutations
+
+    func generateShareLink(tripId: String) async throws -> ShareLinkResponse {
+        let args: [String: Any] = [
+            "tripId": tripId
+        ]
+        return try await callMutation("trips:generateShareLink", args: args)
+    }
+
+    func disableShareLink(tripId: String) async throws -> DeleteResponse {
+        let args: [String: Any] = [
+            "tripId": tripId
+        ]
+        return try await callMutation("trips:disableShareLink", args: args)
+    }
+
+    func joinTripViaLink(shareSlug: String?, shareCode: String?) async throws -> JoinTripResponse {
+        var args: [String: Any] = [:]
+        if let shareSlug = shareSlug {
+            args["shareSlug"] = shareSlug
+        }
+        if let shareCode = shareCode {
+            args["shareCode"] = shareCode
+        }
+        return try await callMutation("trips:joinTripViaLink", args: args)
+    }
+
+    func updatePermission(tripId: String, userId: String, newRole: String) async throws -> DeleteResponse {
+        let args: [String: Any] = [
+            "tripId": tripId,
+            "userId": userId,
+            "newRole": newRole
+        ]
+        return try await callMutation("trips:updatePermission", args: args)
+    }
+
+    func removeAccess(tripId: String, userId: String) async throws -> DeleteResponse {
+        let args: [String: Any] = [
+            "tripId": tripId,
+            "userId": userId
+        ]
+        return try await callMutation("trips:removeAccess", args: args)
+    }
+
+    func getTripPermissions(tripId: String) async throws -> [TripPermissionWithUser] {
+        let args: [String: Any] = [
+            "tripId": tripId
+        ]
+        return try await callQuery("trips:getTripPermissions", args: args)
+    }
+
+    func getSharedTrips() async throws -> [ConvexTrip] {
+        return try await callQuery("trips:getSharedTrips")
+    }
 }
 
 // MARK: - Response Types
@@ -516,6 +571,13 @@ struct ConvexTrip: Decodable {
     let coverImageStorageId: String?
     let createdAt: Double
     let updatedAt: Double
+    // Sharing fields
+    let ownerId: String?
+    let shareSlug: String?
+    let shareCode: String?
+    let shareLinkEnabled: Bool?
+    let userRole: String? // Role in shared trips
+    let joinedAt: Double? // When user joined (for shared trips)
 }
 
 struct ConvexMediaItem: Decodable {
@@ -571,6 +633,33 @@ struct DeleteResponse: Decodable {
 
 struct UploadResponse: Decodable {
     let storageId: String
+}
+
+struct ShareLinkResponse: Decodable {
+    let shareSlug: String
+    let shareCode: String
+    let url: String
+}
+
+struct JoinTripResponse: Decodable {
+    let tripId: String
+    let alreadyMember: Bool
+}
+
+struct TripPermissionWithUser: Decodable {
+    let id: String
+    let userId: String
+    let role: String
+    let grantedVia: String
+    let invitedBy: String
+    let acceptedAt: Double
+    let user: ConvexUserInfo?
+}
+
+struct ConvexUserInfo: Decodable {
+    let name: String?
+    let email: String?
+    let imageUrl: String?
 }
 
 // MARK: - Errors

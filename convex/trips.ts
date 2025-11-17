@@ -1,6 +1,72 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAuth } from "./auth";
+
+// ============= PERMISSION HELPERS =============
+
+// Check if user can view a trip (has any access)
+async function canUserView(
+  ctx: QueryCtx | MutationCtx,
+  tripId: string,
+  userId: string
+): Promise<boolean> {
+  const trip = await ctx.db
+    .query("trips")
+    .withIndex("by_tripId", (q) => q.eq("tripId", tripId))
+    .first();
+
+  // Owner can always view
+  if (trip?.ownerId === userId || trip?.userId === userId) return true;
+
+  // Check if user has permission
+  const permission = await ctx.db
+    .query("tripPermissions")
+    .withIndex("by_tripId_userId", (q) =>
+      q.eq("tripId", tripId).eq("userId", userId)
+    )
+    .first();
+
+  return permission !== null;
+}
+
+// Check if user can edit a trip (owner or collaborator)
+async function canUserEdit(
+  ctx: QueryCtx | MutationCtx,
+  tripId: string,
+  userId: string
+): Promise<boolean> {
+  const trip = await ctx.db
+    .query("trips")
+    .withIndex("by_tripId", (q) => q.eq("tripId", tripId))
+    .first();
+
+  // Owner can always edit
+  if (trip?.ownerId === userId || trip?.userId === userId) return true;
+
+  // Check if user is a collaborator
+  const permission = await ctx.db
+    .query("tripPermissions")
+    .withIndex("by_tripId_userId", (q) =>
+      q.eq("tripId", tripId).eq("userId", userId)
+    )
+    .first();
+
+  return permission?.role === "collaborator";
+}
+
+// Check if user is the owner of a trip
+async function isOwner(
+  ctx: QueryCtx | MutationCtx,
+  tripId: string,
+  userId: string
+): Promise<boolean> {
+  const trip = await ctx.db
+    .query("trips")
+    .withIndex("by_tripId", (q) => q.eq("tripId", tripId))
+    .first();
+
+  return trip?.ownerId === userId || trip?.userId === userId;
+}
 
 // ============= MUTATIONS =============
 
@@ -20,7 +86,8 @@ export const createTrip = mutation({
     const now = Date.now();
 
     const tripDocId = await ctx.db.insert("trips", {
-      userId,
+      userId, // Keep for backward compatibility
+      ownerId: userId, // New owner field
       tripId: args.tripId,
       title: args.title,
       startDate: args.startDate,
@@ -29,6 +96,17 @@ export const createTrip = mutation({
       coverImageStorageId: args.coverImageStorageId,
       createdAt: now,
       updatedAt: now,
+    });
+
+    // Create owner permission
+    await ctx.db.insert("tripPermissions", {
+      tripId: args.tripId,
+      userId: userId,
+      role: "owner",
+      grantedVia: "share_link", // Owner doesn't come from share, but need a value
+      invitedBy: userId, // Self-invited
+      acceptedAt: now,
+      createdAt: now,
     });
 
     return tripDocId;
@@ -57,9 +135,9 @@ export const updateTrip = mutation({
       throw new Error(`Trip not found: ${args.tripId}`);
     }
 
-    // Verify ownership
-    if (trip.userId !== userId) {
-      throw new Error("Unauthorized: You don't own this trip");
+    // Check permission (owner or collaborator can edit)
+    if (!(await canUserEdit(ctx, args.tripId, userId))) {
+      throw new Error("You don't have permission to edit this trip");
     }
 
     const updates: any = {
@@ -95,9 +173,9 @@ export const deleteTrip = mutation({
       throw new Error(`Trip not found: ${args.tripId}`);
     }
 
-    // Verify ownership
-    if (trip.userId !== userId) {
-      throw new Error("Unauthorized: You don't own this trip");
+    // Only owner can delete trip
+    if (!(await isOwner(ctx, args.tripId, userId))) {
+      throw new Error("Only the trip owner can delete the trip");
     }
 
     // Delete all associated media items
@@ -128,8 +206,20 @@ export const deleteTrip = mutation({
       await ctx.db.delete(moment._id);
     }
 
-    // Note: Cover image is already deleted as part of media items above
-    // (coverImageStorageId points to a media item's storageId)
+    // Delete all trip permissions
+    const permissions = await ctx.db
+      .query("tripPermissions")
+      .withIndex("by_tripId", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    for (const permission of permissions) {
+      await ctx.db.delete(permission._id);
+    }
+
+    // Delete preview image if it exists
+    if (trip.previewImageStorageId) {
+      await ctx.storage.delete(trip.previewImageStorageId);
+    }
 
     // Delete the trip itself
     await ctx.db.delete(trip._id);
@@ -153,6 +243,11 @@ export const addMediaItem = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
+
+    // Check permission to edit trip
+    if (!(await canUserEdit(ctx, args.tripId, userId))) {
+      throw new Error("You don't have permission to add media to this trip");
+    }
 
     const now = Date.now();
 
@@ -214,6 +309,11 @@ export const addMoment = mutation({
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
 
+    // Check permission to edit trip
+    if (!(await canUserEdit(ctx, args.tripId, userId))) {
+      throw new Error("You don't have permission to add moments to this trip");
+    }
+
     const now = Date.now();
 
     const momentDocId = await ctx.db.insert("moments", {
@@ -250,7 +350,25 @@ export const getAllTrips = query({
       .order("desc")
       .collect();
 
-    return trips;
+    // Add userRole for each trip by looking up permissions
+    const tripsWithRole = await Promise.all(
+      trips.map(async (trip) => {
+        // Look up user's permission for this trip
+        const permission = await ctx.db
+          .query("tripPermissions")
+          .withIndex("by_tripId_userId", (q) =>
+            q.eq("tripId", trip.tripId).eq("userId", userId)
+          )
+          .first();
+
+        return {
+          ...trip,
+          userRole: permission?.role || null,
+        };
+      })
+    );
+
+    return tripsWithRole;
   },
 });
 
@@ -267,9 +385,22 @@ export const getTrip = query({
       .withIndex("by_tripId", (q) => q.eq("tripId", args.tripId))
       .first();
 
-    if (!trip || trip.userId !== userId) {
+    if (!trip) {
       return null;
     }
+
+    // Check if user has permission to view this trip
+    if (!(await canUserView(ctx, args.tripId, userId))) {
+      return null;
+    }
+
+    // Look up user's permission for this trip
+    const permission = await ctx.db
+      .query("tripPermissions")
+      .withIndex("by_tripId_userId", (q) =>
+        q.eq("tripId", args.tripId).eq("userId", userId)
+      )
+      .first();
 
     const mediaItems = await ctx.db
       .query("mediaItems")
@@ -282,7 +413,10 @@ export const getTrip = query({
       .collect();
 
     return {
-      trip,
+      trip: {
+        ...trip,
+        userRole: permission?.role || null,
+      },
       mediaItems,
       moments,
     };
@@ -339,9 +473,9 @@ export const deleteMediaItem = mutation({
       throw new Error(`Media item not found: ${args.mediaItemId}`);
     }
 
-    // Verify ownership
-    if (mediaItem.userId !== userId) {
-      throw new Error("Unauthorized: You don't own this media item");
+    // Check permission to edit trip
+    if (!(await canUserEdit(ctx, mediaItem.tripId, userId))) {
+      throw new Error("You don't have permission to delete media from this trip");
     }
 
     // Remove this media item from all moments that reference it
@@ -397,9 +531,9 @@ export const deleteMoment = mutation({
       throw new Error(`Moment not found: ${args.momentId}`);
     }
 
-    // Verify ownership
-    if (moment.userId !== userId) {
-      throw new Error("Unauthorized: You don't own this moment");
+    // Check permission to edit trip
+    if (!(await canUserEdit(ctx, moment.tripId, userId))) {
+      throw new Error("You don't have permission to delete moments from this trip");
     }
 
     // Delete the moment
@@ -431,9 +565,9 @@ export const updateMediaItem = mutation({
       throw new Error(`Media item not found: ${args.mediaItemId}`);
     }
 
-    // Verify ownership
-    if (mediaItem.userId !== userId) {
-      throw new Error("Unauthorized: You don't own this media item");
+    // Check permission to edit trip
+    if (!(await canUserEdit(ctx, mediaItem.tripId, userId))) {
+      throw new Error("You don't have permission to edit media in this trip");
     }
 
     const updates: any = {
@@ -471,9 +605,9 @@ export const updateMoment = mutation({
       throw new Error(`Moment not found: ${args.momentId}`);
     }
 
-    // Verify ownership
-    if (moment.userId !== userId) {
-      throw new Error("Unauthorized: You don't own this moment");
+    // Check permission to edit trip
+    if (!(await canUserEdit(ctx, moment.tripId, userId))) {
+      throw new Error("You don't have permission to edit moments in this trip");
     }
 
     const updates: any = {
@@ -515,9 +649,9 @@ export const updateMomentGridPosition = mutation({
       throw new Error(`Moment not found: ${args.momentId}`);
     }
 
-    // Verify ownership
-    if (moment.userId !== userId) {
-      throw new Error("Unauthorized: You don't own this moment");
+    // Check permission to edit trip
+    if (!(await canUserEdit(ctx, moment.tripId, userId))) {
+      throw new Error("You don't have permission to edit moments in this trip");
     }
 
     await ctx.db.patch(moment._id, {
@@ -560,9 +694,9 @@ export const batchUpdateMomentGridPositions = mutation({
         throw new Error(`Moment not found: ${update.momentId}`);
       }
 
-      // Verify ownership
-      if (moment.userId !== userId) {
-        throw new Error("Unauthorized: You don't own this moment");
+      // Check permission to edit trip
+      if (!(await canUserEdit(ctx, moment.tripId, userId))) {
+        throw new Error("You don't have permission to edit moments in this trip");
       }
 
       await ctx.db.patch(moment._id, {
@@ -572,5 +706,479 @@ export const batchUpdateMomentGridPositions = mutation({
     }
 
     return { success: true };
+  },
+});
+
+// ============= QUERIES =============
+
+// Get public preview of a trip (for web preview page)
+export const getPublicPreview = query({
+  args: {
+    shareSlug: v.optional(v.string()),
+    shareCode: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (!args.shareSlug && !args.shareCode) {
+      throw new Error("Either shareSlug or shareCode must be provided");
+    }
+
+    // Find trip by slug or code
+    let trip;
+    if (args.shareSlug) {
+      trip = await ctx.db
+        .query("trips")
+        .withIndex("by_shareSlug", (q) => q.eq("shareSlug", args.shareSlug))
+        .first();
+    } else if (args.shareCode) {
+      trip = await ctx.db
+        .query("trips")
+        .withIndex("by_shareCode", (q) => q.eq("shareCode", args.shareCode?.toUpperCase()))
+        .first();
+    }
+
+    if (!trip) {
+      return null;
+    }
+
+    // Check if sharing is enabled
+    if (!trip.shareLinkEnabled) {
+      return null;
+    }
+
+    // Get moments for this trip (limit to 6 for preview)
+    const moments = await ctx.db
+      .query("moments")
+      .withIndex("by_tripId", (q) => q.eq("tripId", trip.tripId))
+      .order("desc")
+      .take(6);
+
+    // Get media items for the moments
+    const momentMediaItems = await Promise.all(
+      moments.map(async (moment) => {
+        const mediaItems = await ctx.db
+          .query("mediaItems")
+          .withIndex("by_tripId", (q) => q.eq("tripId", trip.tripId))
+          .collect();
+
+        // Filter to only media in this moment
+        return mediaItems.filter((item) =>
+          moment.mediaItemIDs.includes(item.mediaItemId)
+        );
+      })
+    );
+
+    return {
+      trip: {
+        tripId: trip.tripId,
+        title: trip.title,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        shareSlug: trip.shareSlug,
+        shareCode: trip.shareCode,
+        coverImageStorageId: trip.coverImageStorageId,
+      },
+      moments: moments.slice(0, 6).map((moment, index) => ({
+        momentId: moment.momentId,
+        title: moment.title,
+        mediaCount: momentMediaItems[index]?.length || 0,
+        firstMediaStorageId: momentMediaItems[index]?.[0]?.storageId,
+      })),
+      totalMoments: moments.length,
+    };
+  },
+});
+
+// ============= SHARING MUTATIONS =============
+
+// Helper function to generate a URL-safe slug
+function generateSlug(title: string): string {
+  // Convert title to lowercase, remove special chars, replace spaces with dashes
+  const baseSlug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .substring(0, 20); // Limit length
+
+  // Add random suffix for uniqueness
+  const randomSuffix = Math.random().toString(36).substring(2, 6);
+  return `${baseSlug}-${randomSuffix}`;
+}
+
+// Helper function to generate a human-readable share code
+function generateShareCode(title: string): string {
+  // Take first word of title (up to 6 chars) + 2 random digits
+  const firstWord = title.split(' ')[0].toUpperCase().substring(0, 6);
+  const randomDigits = Math.floor(10 + Math.random() * 90); // 2 digits (10-99)
+  return `${firstWord}${randomDigits}`;
+}
+
+// Generate share link for a trip (enables sharing)
+export const generateShareLink = mutation({
+  args: {
+    tripId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+
+    // Check if user is owner (only owner can enable sharing)
+    if (!(await isOwner(ctx, args.tripId, userId))) {
+      throw new Error("Only the trip owner can generate share links");
+    }
+
+    // Get the trip
+    const trip = await ctx.db
+      .query("trips")
+      .withIndex("by_tripId", (q) => q.eq("tripId", args.tripId))
+      .first();
+
+    if (!trip) {
+      throw new Error("Trip not found");
+    }
+
+    // If trip already has a share link, return existing
+    if (trip.shareSlug && trip.shareCode) {
+      return {
+        shareSlug: trip.shareSlug,
+        shareCode: trip.shareCode,
+        url: `https://rewinded.app/trip/${trip.shareSlug}`,
+      };
+    }
+
+    // Generate unique slug and code
+    let shareSlug = generateSlug(trip.title);
+    let shareCode = generateShareCode(trip.title);
+
+    // Ensure slug is unique
+    let existingSlug = await ctx.db
+      .query("trips")
+      .withIndex("by_shareSlug", (q) => q.eq("shareSlug", shareSlug))
+      .first();
+
+    while (existingSlug) {
+      shareSlug = generateSlug(trip.title);
+      existingSlug = await ctx.db
+        .query("trips")
+        .withIndex("by_shareSlug", (q) => q.eq("shareSlug", shareSlug))
+        .first();
+    }
+
+    // Ensure code is unique
+    let existingCode = await ctx.db
+      .query("trips")
+      .withIndex("by_shareCode", (q) => q.eq("shareCode", shareCode))
+      .first();
+
+    while (existingCode) {
+      shareCode = generateShareCode(trip.title);
+      existingCode = await ctx.db
+        .query("trips")
+        .withIndex("by_shareCode", (q) => q.eq("shareCode", shareCode))
+        .first();
+    }
+
+    // Update trip with share link and enable sharing
+    await ctx.db.patch(trip._id, {
+      shareSlug,
+      shareCode,
+      shareLinkEnabled: true,
+      updatedAt: Date.now(),
+    });
+
+    return {
+      shareSlug,
+      shareCode,
+      url: `https://rewinded.app/trip/${shareSlug}`,
+    };
+  },
+});
+
+// Disable share link for a trip
+export const disableShareLink = mutation({
+  args: {
+    tripId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+
+    // Check if user is owner
+    if (!(await isOwner(ctx, args.tripId, userId))) {
+      throw new Error("Only the trip owner can disable share links");
+    }
+
+    // Get the trip
+    const trip = await ctx.db
+      .query("trips")
+      .withIndex("by_tripId", (q) => q.eq("tripId", args.tripId))
+      .first();
+
+    if (!trip) {
+      throw new Error("Trip not found");
+    }
+
+    // Disable sharing (keep slug/code for re-enabling)
+    await ctx.db.patch(trip._id, {
+      shareLinkEnabled: false,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+// Update a user's permission on a trip
+export const updatePermission = mutation({
+  args: {
+    tripId: v.string(),
+    userId: v.string(), // User whose permission to update
+    newRole: v.union(v.literal("collaborator"), v.literal("viewer")),
+  },
+  handler: async (ctx, args) => {
+    const currentUserId = await requireAuth(ctx);
+
+    // Check if current user can manage permissions (owner or collaborator)
+    const trip = await ctx.db
+      .query("trips")
+      .withIndex("by_tripId", (q) => q.eq("tripId", args.tripId))
+      .first();
+
+    if (!trip) {
+      throw new Error("Trip not found");
+    }
+
+    // Only owner and collaborators can upgrade viewers
+    const hasPermission = await isOwner(ctx, args.tripId, currentUserId) ||
+                         await canUserEdit(ctx, args.tripId, currentUserId);
+
+    if (!hasPermission) {
+      throw new Error("You don't have permission to manage access for this trip");
+    }
+
+    // Can't change owner's role
+    if (trip.ownerId === args.userId || trip.userId === args.userId) {
+      throw new Error("Cannot change the owner's role");
+    }
+
+    // Find the permission to update
+    const permission = await ctx.db
+      .query("tripPermissions")
+      .withIndex("by_tripId_userId", (q) =>
+        q.eq("tripId", args.tripId).eq("userId", args.userId)
+      )
+      .first();
+
+    if (!permission) {
+      throw new Error("User does not have access to this trip");
+    }
+
+    // Update the permission
+    await ctx.db.patch(permission._id, {
+      role: args.newRole,
+    });
+
+    return { success: true };
+  },
+});
+
+// Remove a user's access to a trip
+export const removeAccess = mutation({
+  args: {
+    tripId: v.string(),
+    userId: v.string(), // User to remove
+  },
+  handler: async (ctx, args) => {
+    const currentUserId = await requireAuth(ctx);
+
+    // Check if current user is the owner
+    if (!(await isOwner(ctx, args.tripId, currentUserId))) {
+      throw new Error("Only the trip owner can remove access");
+    }
+
+    const trip = await ctx.db
+      .query("trips")
+      .withIndex("by_tripId", (q) => q.eq("tripId", args.tripId))
+      .first();
+
+    if (!trip) {
+      throw new Error("Trip not found");
+    }
+
+    // Can't remove owner
+    if (trip.ownerId === args.userId || trip.userId === args.userId) {
+      throw new Error("Cannot remove the owner from the trip");
+    }
+
+    // Find and delete the permission
+    const permission = await ctx.db
+      .query("tripPermissions")
+      .withIndex("by_tripId_userId", (q) =>
+        q.eq("tripId", args.tripId).eq("userId", args.userId)
+      )
+      .first();
+
+    if (!permission) {
+      throw new Error("User does not have access to this trip");
+    }
+
+    await ctx.db.delete(permission._id);
+
+    return { success: true };
+  },
+});
+
+// Get trips shared with the current user (where they're not the owner)
+export const getSharedTrips = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireAuth(ctx);
+
+    // Get all permissions for this user
+    const permissions = await ctx.db
+      .query("tripPermissions")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .collect();
+
+    // Get the trips for these permissions
+    const trips = await Promise.all(
+      permissions.map(async (permission) => {
+        const trip = await ctx.db
+          .query("trips")
+          .withIndex("by_tripId", (q) => q.eq("tripId", permission.tripId))
+          .first();
+
+        if (!trip) return null;
+
+        // Only return trips where user is NOT the owner
+        if (trip.ownerId === userId || trip.userId === userId) {
+          return null;
+        }
+
+        return {
+          ...trip,
+          userRole: permission.role,
+        };
+      })
+    );
+
+    // Filter out nulls and return
+    return trips.filter((trip) => trip !== null);
+  },
+});
+
+// Get all permissions for a trip (with user info)
+export const getTripPermissions = query({
+  args: {
+    tripId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+
+    // Check if user has access to view permissions
+    if (!(await canUserView(ctx, args.tripId, userId))) {
+      throw new Error("You don't have access to this trip");
+    }
+
+    // Get all permissions for this trip
+    const permissions = await ctx.db
+      .query("tripPermissions")
+      .withIndex("by_tripId", (q) => q.eq("tripId", args.tripId))
+      .collect();
+
+    // Get user info for each permission
+    const permissionsWithUserInfo = await Promise.all(
+      permissions.map(async (permission) => {
+        const user = await ctx.db
+          .query("users")
+          .withIndex("by_clerkId", (q) => q.eq("clerkId", permission.userId))
+          .first();
+
+        return {
+          id: permission._id,
+          userId: permission.userId,
+          role: permission.role,
+          grantedVia: permission.grantedVia,
+          invitedBy: permission.invitedBy,
+          acceptedAt: permission.acceptedAt,
+          user: user ? {
+            name: user.name || null,
+            email: user.email || null,
+            imageUrl: user.imageUrl || null,
+          } : null,
+        };
+      })
+    );
+
+    return permissionsWithUserInfo;
+  },
+});
+
+// Join a trip via share link or code
+export const joinTripViaLink = mutation({
+  args: {
+    // Either shareSlug or shareCode must be provided
+    shareSlug: v.optional(v.string()),
+    shareCode: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuth(ctx);
+
+    if (!args.shareSlug && !args.shareCode) {
+      throw new Error("Either shareSlug or shareCode must be provided");
+    }
+
+    // Find trip by slug or code
+    let trip;
+    if (args.shareSlug) {
+      trip = await ctx.db
+        .query("trips")
+        .withIndex("by_shareSlug", (q) => q.eq("shareSlug", args.shareSlug))
+        .first();
+    } else if (args.shareCode) {
+      trip = await ctx.db
+        .query("trips")
+        .withIndex("by_shareCode", (q) => q.eq("shareCode", args.shareCode?.toUpperCase()))
+        .first();
+    }
+
+    if (!trip) {
+      throw new Error("Trip not found. Please check the link or code.");
+    }
+
+    // Check if sharing is enabled
+    if (!trip.shareLinkEnabled) {
+      throw new Error("This trip is no longer accepting new members");
+    }
+
+    // Check if user already has access
+    const existingPermission = await ctx.db
+      .query("tripPermissions")
+      .withIndex("by_tripId_userId", (q) =>
+        q.eq("tripId", trip.tripId).eq("userId", userId)
+      )
+      .first();
+
+    if (existingPermission) {
+      // User already has access, just return trip info
+      return {
+        tripId: trip.tripId,
+        alreadyMember: true,
+      };
+    }
+
+    // Create viewer permission for the user
+    const now = Date.now();
+    await ctx.db.insert("tripPermissions", {
+      tripId: trip.tripId,
+      userId,
+      role: "viewer",
+      grantedVia: "share_link",
+      invitedBy: trip.ownerId || trip.userId,
+      acceptedAt: now,
+      createdAt: now,
+    });
+
+    return {
+      tripId: trip.tripId,
+      alreadyMember: false,
+    };
   },
 });
