@@ -145,6 +145,7 @@ struct MomentCardView: View {
                 mediaItemView(mediaItems[0], width: validWidth / 2, height: validHeight)
                 mediaItemView(mediaItems[1], width: validWidth / 2, height: validHeight)
             }
+            .frame(height: validHeight)
         } else if mediaItems.count == 3 {
             HStack(spacing: 2) {
                 mediaItemView(mediaItems[0], width: validWidth * 0.6, height: validHeight)
@@ -153,12 +154,27 @@ struct MomentCardView: View {
                     mediaItemView(mediaItems[1], width: validWidth * 0.4, height: validHeight / 2)
                     mediaItemView(mediaItems[2], width: validWidth * 0.4, height: validHeight / 2)
                 }
+                .frame(height: validHeight)
             }
+            .frame(height: validHeight)
         } else {
             // 4+ items: grid layout
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 2) {
-                ForEach(mediaItems.prefix(4).indices, id: \.self) { index in
-                    mediaItemView(mediaItems[index], width: validWidth / 2 - 1, height: validHeight / 2 - 1)
+            VStack(spacing: 2) {
+                HStack(spacing: 2) {
+                    if mediaItems.count > 0 {
+                        mediaItemView(mediaItems[0], width: validWidth / 2, height: validHeight / 2)
+                    }
+                    if mediaItems.count > 1 {
+                        mediaItemView(mediaItems[1], width: validWidth / 2, height: validHeight / 2)
+                    }
+                }
+                HStack(spacing: 2) {
+                    if mediaItems.count > 2 {
+                        mediaItemView(mediaItems[2], width: validWidth / 2, height: validHeight / 2)
+                    }
+                    if mediaItems.count > 3 {
+                        mediaItemView(mediaItems[3], width: validWidth / 2, height: validHeight / 2)
+                    }
                 }
             }
         }
@@ -178,7 +194,6 @@ struct MomentCardView: View {
         } else {
             MediaImageView(mediaItem: mediaItem)
                 .id(mediaItem.id)
-                .scaledToFill()
                 .frame(width: validWidth, height: validHeight)
                 .clipped()
         }

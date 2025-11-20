@@ -49,18 +49,19 @@ struct ExpandedMomentView: View {
                 TabView(selection: $currentPhotoIndex) {
                     ForEach(mediaItems.indices, id: \.self) { index in
                         let mediaItem = mediaItems[index]
-                        ZoomableScrollView(isZoomed: $isZoomed) {
-                            if mediaItem.type == .video {
-                                MediaVideoView(mediaItem: mediaItem, isInExpandedView: true)
-                                    .id(mediaItem.id)
-                                    .scaledToFit()
-                            } else {
+                        if mediaItem.type == .video {
+                            MediaVideoView(mediaItem: mediaItem, isInExpandedView: true)
+                                .id(mediaItem.id)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .tag(index)
+                        } else {
+                            ZoomableScrollView(isZoomed: $isZoomed) {
                                 MediaImageView(mediaItem: mediaItem)
                                     .id(mediaItem.id)
                                     .scaledToFit()
                             }
+                            .tag(index)
                         }
-                        .tag(index)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))

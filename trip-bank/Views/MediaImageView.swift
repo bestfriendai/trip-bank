@@ -22,6 +22,7 @@ struct MediaImageView: View {
                     case .success(let image):
                         image
                             .resizable()
+                            .scaledToFill()
                     case .failure(let error):
                         ZStack {
                             placeholderImage

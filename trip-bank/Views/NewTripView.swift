@@ -53,6 +53,7 @@ struct NewTripView: View {
                                 if let storageId = selectedCoverImageStorageId,
                                    let mediaItem = currentTrip.mediaItems.first(where: { $0.storageId == storageId }) {
                                     MediaImageView(mediaItem: mediaItem)
+                                        .id(storageId)
                                         .scaledToFill()
                                         .frame(width: 60, height: 60)
                                         .clipShape(RoundedRectangle(cornerRadius: 6))
