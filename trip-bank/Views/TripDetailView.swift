@@ -1,4 +1,6 @@
 import SwiftUI
+import Combine
+import ConvexMobile
 
 struct TripDetailView: View {
     let trip: Trip
@@ -12,15 +14,26 @@ struct TripDetailView: View {
     @State private var showingManageAccess = false
     @Environment(\.dismiss) var dismiss
 
-    // Permissions
-    @State private var canEdit = false
-    @State private var canDelete = false
-    @State private var canManageAccess = false
+    // Permissions from subscription
     @State private var permissions: [TripPermissionWithUser] = []
+    @State private var permissionsSubscription: AnyCancellable?
 
     // Get the latest version of the trip from the store
     private var currentTrip: Trip {
         tripStore.trips.first(where: { $0.id == trip.id }) ?? trip
+    }
+
+    // Computed permissions based on current trip state
+    private var canEdit: Bool {
+        tripStore.canEdit(trip: currentTrip)
+    }
+
+    private var canDelete: Bool {
+        tripStore.isOwner(trip: currentTrip)
+    }
+
+    private var canManageAccess: Bool {
+        tripStore.canManageAccess(trip: currentTrip)
     }
 
     var body: some View {
@@ -51,15 +64,15 @@ struct TripDetailView: View {
             }
         }
         .onAppear {
-            // Check permissions when view appears
-            canEdit = tripStore.canEdit(trip: currentTrip)
-            canDelete = tripStore.isOwner(trip: currentTrip)
-            canManageAccess = tripStore.canManageAccess(trip: currentTrip)
-
-            // Load permissions to show collaborators
-            Task {
-                await loadPermissions()
-            }
+            // Subscribe to real-time trip details (for moments, media, etc.)
+            tripStore.subscribeTripDetails(tripId: trip.id.uuidString)
+            // Subscribe to real-time permission updates
+            subscribeToPermissions()
+        }
+        .onDisappear {
+            // Cancel subscription when view disappears
+            permissionsSubscription?.cancel()
+            permissionsSubscription = nil
         }
         .toolbar {
             // Only show add button if user can edit
@@ -175,11 +188,31 @@ struct TripDetailView: View {
         dismiss()
     }
 
-    private func loadPermissions() async {
-        do {
-            permissions = try await ConvexClient.shared.getTripPermissions(tripId: trip.id.uuidString)
-        } catch {
-            print("Error loading permissions: \(error)")
+    /// Subscribe to real-time permission updates
+    private func subscribeToPermissions() {
+        Task {
+            // Ensure authentication before subscribing
+            await ConvexRealtimeClient.shared.ensureLoggedIn()
+
+            // Subscribe to permission changes
+            permissionsSubscription = ConvexRealtimeClient.shared.subscribe(
+                to: "trips:getTripPermissions",
+                with: ["tripId": trip.id.uuidString],
+                yielding: [TripPermissionWithUser].self
+            )
+            .receive(on: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { completion in
+                    if case .failure(let error) = completion {
+                        print("❌ [TripDetailView] Permissions subscription error: \(error)")
+                    }
+                },
+                receiveValue: { [self] updatedPermissions in
+                    print("✅ [TripDetailView] Received \(updatedPermissions.count) permissions from subscription")
+                    permissions = updatedPermissions
+                    // canEdit, canDelete, canManageAccess are now computed properties
+                }
+            )
         }
     }
 

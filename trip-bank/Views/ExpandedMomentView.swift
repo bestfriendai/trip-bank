@@ -15,9 +15,6 @@ struct ExpandedMomentView: View {
     @State private var isZoomed = false
     @StateObject private var audioManager = VideoAudioManager.shared
 
-    // Permissions
-    @State private var canEdit = false
-
     private var currentMediaItem: MediaItem? {
         guard !mediaItems.isEmpty, currentPhotoIndex < mediaItems.count else { return nil }
         return mediaItems[currentPhotoIndex]
@@ -39,6 +36,12 @@ struct ExpandedMomentView: View {
             return latestMoment
         }
         return moment // fallback to original
+    }
+
+    // Computed permission based on current trip state
+    private var canEdit: Bool {
+        guard let trip = tripStore.trips.first(where: { $0.id == tripId }) else { return false }
+        return tripStore.canEdit(trip: trip)
     }
 
 
@@ -226,10 +229,7 @@ struct ExpandedMomentView: View {
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .onAppear {
-            // Check permissions when view appears
-            if let trip = tripStore.trips.first(where: { $0.id == tripId }) {
-                canEdit = tripStore.canEdit(trip: trip)
-            }
+            // Permissions are now computed properties
 
             // Video audio management
             // Mute all canvas videos when expanded view opens

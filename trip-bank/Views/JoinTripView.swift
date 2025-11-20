@@ -99,7 +99,7 @@ struct JoinTripView: View {
         errorMessage = nil
 
         do {
-            let response = try await ConvexClient.shared.joinTripViaLink(
+            let response = try await ConvexRealtimeClient.shared.joinTripViaLink(
                 shareSlug: nil,
                 shareCode: tripCode.uppercased()
             )

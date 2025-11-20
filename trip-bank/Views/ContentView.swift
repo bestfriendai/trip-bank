@@ -1,5 +1,7 @@
 import SwiftUI
 import Clerk
+import Combine
+import ConvexMobile
 
 enum TripTab {
     case myTrips
@@ -18,12 +20,17 @@ struct ContentView: View {
     @State private var needsProfileSetup = false
     @Binding var pendingShareSlug: String?
 
+    // Real-time subscription management
+    @State private var sharedTripsSubscription: AnyCancellable?
+
     var body: some View {
         if clerk.user != nil {
             mainContent
                 .task {
                     // Sync user to Convex database when authenticated
                     await syncUserToConvex()
+                    // Start real-time subscriptions for trips
+                    tripStore.subscribeToTrips()
                     // Load shared trips on initial load
                     await loadSharedTrips()
                     // Check if user needs to complete profile setup
@@ -31,9 +38,8 @@ struct ContentView: View {
                 }
                 .onChange(of: selectedTab) { _, newTab in
                     if newTab == .sharedWithMe {
-                        Task {
-                            await loadSharedTrips()
-                        }
+                        // Subscribe to shared trips when switching to that tab
+                        subscribeToSharedTrips()
                     }
                 }
                 .onChange(of: pendingShareSlug) { _, slug in
@@ -48,7 +54,7 @@ struct ContentView: View {
 
     private func syncUserToConvex() async {
         do {
-            let user = try await ConvexClient.shared.syncUser()
+            let user = try await ConvexRealtimeClient.shared.syncUser()
             print("✅ User synced to Convex: \(user?.email ?? "unknown")")
         } catch {
             print("❌ Failed to sync user to Convex: \(error)")
@@ -269,52 +275,135 @@ struct ContentView: View {
         }
     }
 
-    private func loadSharedTrips() async {
-        isLoadingShared = true
-        do {
-            let convexTrips = try await ConvexClient.shared.getSharedTrips()
-
-            // Convert Convex trips to local Trip objects
-            var loadedTrips: [Trip] = []
-
-            for convexTrip in convexTrips {
-                // Fetch full trip details including media items and moments
-                if let tripDetails = try await ConvexClient.shared.getTrip(id: convexTrip.tripId) {
-                    let mediaItems = tripDetails.mediaItems.map { $0.toMediaItem() }
-                    let moments = tripDetails.moments.map { $0.toMoment() }
-
-                    let trip = Trip(
-                        id: UUID(uuidString: convexTrip.tripId) ?? UUID(),
-                        title: convexTrip.title,
-                        startDate: Date(timeIntervalSince1970: convexTrip.startDate / 1000),
-                        endDate: Date(timeIntervalSince1970: convexTrip.endDate / 1000),
-                        coverImageStorageId: convexTrip.coverImageStorageId,
-                        mediaItems: mediaItems,
-                        moments: moments,
-                        ownerId: tripDetails.trip.ownerId,
-                        shareSlug: tripDetails.trip.shareSlug,
-                        shareCode: tripDetails.trip.shareCode,
-                        shareLinkEnabled: tripDetails.trip.shareLinkEnabled ?? false,
-                        permissions: [],
-                        userRole: convexTrip.userRole,
-                        joinedAt: convexTrip.joinedAt
-                    )
-
-                    loadedTrips.append(trip)
-                }
-            }
-
-            sharedTrips = loadedTrips
-        } catch {
-            print("Error loading shared trips: \(error)")
+    /// Subscribe to real-time updates for shared trips
+    private func subscribeToSharedTrips() {
+        guard sharedTripsSubscription == nil else {
+            print("ℹ️ [ContentView] Already subscribed to shared trips")
+            return
         }
+
+        isLoadingShared = true
+
+        Task {
+            // Ensure authentication before subscribing
+            await ConvexRealtimeClient.shared.ensureLoggedIn()
+
+            sharedTripsSubscription = ConvexRealtimeClient.shared.subscribe(
+                to: "trips:getSharedTrips",
+                yielding: [ConvexTrip].self
+            )
+            .receive(on: DispatchQueue.main)
+            .sink(
+                receiveCompletion: { [self] completion in
+                    if case .failure(let error) = completion {
+                        print("❌ [ContentView] Shared trips subscription error: \(error)")
+                    }
+                    isLoadingShared = false
+                },
+                receiveValue: { [self] convexTrips in
+                    print("✅ [ContentView] Received \(convexTrips.count) shared trips from subscription")
+
+                    Task {
+                        await updateSharedTripsWithDetails(convexTrips)
+                    }
+                }
+            )
+        }
+    }
+
+    private func updateSharedTripsWithDetails(_ convexTrips: [ConvexTrip]) async {
+        var updatedTrips: [Trip] = []
+
+        for convexTrip in convexTrips {
+            // Fetch trip details for each shared trip
+            do {
+                if let tripDetails = try await fetchTripDetails(id: convexTrip.tripId) {
+                    var trip = tripDetails
+                    trip.userRole = convexTrip.userRole
+                    trip.joinedAt = convexTrip.joinedAt
+                    updatedTrips.append(trip)
+                }
+            } catch {
+                print("❌ [ContentView] Failed to fetch shared trip details: \(error)")
+            }
+        }
+
+        sharedTrips = updatedTrips
         isLoadingShared = false
+    }
+
+    private func fetchTripDetails(id: String) async throws -> Trip? {
+        // Use HTTP query for initial fetch
+        let url = URL(string: "https://flippant-mongoose-94.convex.cloud/api/query")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if let token = await getAuthToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let body: [String: Any] = [
+            "path": "trips:getTrip",
+            "args": ["tripId": id]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            return nil
+        }
+
+        let convexResponse = try JSONDecoder().decode(ConvexResponse<TripDetailsResponse?>.self, from: data)
+
+        guard convexResponse.status == "success", let tripDetails = convexResponse.value else {
+            return nil
+        }
+
+        let mediaItems = tripDetails.mediaItems.map { $0.toMediaItem() }
+        let moments = tripDetails.moments.map { $0.toMoment() }
+
+        return Trip(
+            id: UUID(uuidString: tripDetails.trip.tripId) ?? UUID(),
+            title: tripDetails.trip.title,
+            startDate: Date(timeIntervalSince1970: tripDetails.trip.startDate / 1000),
+            endDate: Date(timeIntervalSince1970: tripDetails.trip.endDate / 1000),
+            coverImageName: tripDetails.trip.coverImageName,
+            coverImageStorageId: tripDetails.trip.coverImageStorageId,
+            mediaItems: mediaItems,
+            moments: moments,
+            ownerId: tripDetails.trip.ownerId,
+            shareSlug: tripDetails.trip.shareSlug,
+            shareCode: tripDetails.trip.shareCode,
+            shareLinkEnabled: tripDetails.trip.shareLinkEnabled ?? false,
+            permissions: [],
+            userRole: tripDetails.trip.userRole,
+            joinedAt: nil
+        )
+    }
+
+    private func getAuthToken() async -> String? {
+        guard let session = await clerk.session else { return nil }
+        do {
+            guard let tokenResource = try await session.getToken(.init(template: "convex")) else {
+                return nil
+            }
+            return tokenResource.jwt
+        } catch {
+            return nil
+        }
+    }
+
+    private func loadSharedTrips() async {
+        // Called on initial load - subscription will handle updates
+        subscribeToSharedTrips()
     }
 
     private func handleDeepLinkJoin(slug: String) {
         Task {
             do {
-                let response = try await ConvexClient.shared.joinTripViaLink(
+                let response = try await ConvexRealtimeClient.shared.joinTripViaLink(
                     shareSlug: slug,
                     shareCode: nil
                 )
@@ -323,9 +412,7 @@ struct ContentView: View {
                     print("Already a member of this trip")
                 } else {
                     print("✅ Successfully joined trip via deep link!")
-                    // Reload both my trips and shared trips
-                    await tripStore.loadTrips()
-                    await loadSharedTrips()
+                    // Subscriptions will automatically update the trip lists
                     // Switch to shared trips tab to show the newly joined trip
                     selectedTab = .sharedWithMe
                 }

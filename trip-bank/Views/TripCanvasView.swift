@@ -9,8 +9,10 @@ struct TripCanvasView: View {
     @State private var canvasSize: CGSize = .zero
     @State private var appearingMoments: Set<UUID> = []
 
-    // Permissions
-    @State private var canEdit = false
+    // Permissions (computed based on current trip state)
+    private var canEdit: Bool {
+        tripStore.canEdit(trip: currentTrip)
+    }
 
     // Drag state
     @State private var draggingMoment: UUID?
@@ -90,9 +92,6 @@ struct TripCanvasView: View {
             }
             .scrollDisabled(draggingMoment != nil)
             .onAppear {
-                // Check permissions when view appears
-                canEdit = tripStore.canEdit(trip: trip)
-
                 // Canvas size setup
                 if geometry.size.width > 0 && geometry.size.height > 0 {
                     canvasSize = geometry.size
@@ -361,7 +360,7 @@ struct TripCanvasView: View {
         // Save ALL reflowed moments to backend
         Task {
             do {
-                _ = try await ConvexClient.shared.batchUpdateMomentGridPositions(moments: reflowedMoments)
+                _ = try await ConvexRealtimeClient.shared.batchUpdateMomentGridPositions(updates: reflowedMoments.map { ($0.id.uuidString, $0.gridPosition) })
             } catch {
                 print("❌ Failed to update moment positions: \(error)")
             }
@@ -435,7 +434,7 @@ struct TripCanvasView: View {
                 if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == trip.id }) {
                     let reflowedMoments = tripStore.trips[tripIndex].moments
 
-                    _ = try await ConvexClient.shared.batchUpdateMomentGridPositions(moments: reflowedMoments)
+                    _ = try await ConvexRealtimeClient.shared.batchUpdateMomentGridPositions(updates: reflowedMoments.map { ($0.id.uuidString, $0.gridPosition) })
                 }
             } catch {
                 print("❌ Failed to update moment sizes: \(error)")

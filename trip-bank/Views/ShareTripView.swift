@@ -208,7 +208,7 @@ struct ShareTripView: View {
 
         do {
             // Generate share link
-            shareInfo = try await ConvexClient.shared.generateShareLink(tripId: trip.id.uuidString)
+            shareInfo = try await ConvexRealtimeClient.shared.generateShareLink(tripId: trip.id.uuidString)
         } catch {
             errorMessage = error.localizedDescription
             print("Error generating share link: \(error)")

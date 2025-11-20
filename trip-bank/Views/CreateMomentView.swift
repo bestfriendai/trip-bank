@@ -260,7 +260,7 @@ struct MediaThumbnailView: View {
         isLoading = true
 
         do {
-            let urlString = try await ConvexClient.shared.getFileUrl(storageId: storageId)
+            let urlString = try await ConvexRealtimeClient.shared.getFileUrl(storageId: storageId)
 
             // Check if task was cancelled
             try Task.checkCancellation()
