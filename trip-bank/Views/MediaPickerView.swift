@@ -2,7 +2,7 @@ import SwiftUI
 
 enum MediaPickerState {
     case selectingFromLibrary
-    case loadingMedia(count: Int)
+    case loadingMedia(current: Int, total: Int)
     case previewing([SelectedMediaItem])
     case uploading(current: Int, total: Int)
     case error(String)
@@ -16,24 +16,29 @@ struct MediaPickerView: View {
     @State private var state: MediaPickerState = .selectingFromLibrary
 
     var body: some View {
-        NavigationStack {
-            VStack {
-                switch state {
-                case .selectingFromLibrary:
-                    PHPickerView { result in
-                        handlePickerResult(result)
-                    }
+        Group {
+            switch state {
+            case .selectingFromLibrary:
+                PHPickerView { result in
+                    handlePickerResult(result)
+                }
 
-                case .loadingMedia(let count):
+            case .loadingMedia(let current, let total):
+                NavigationStack {
                     VStack(spacing: 16) {
-                        ProgressView()
-                            .scaleEffect(1.5)
-                        Text("Loading \(count) item(s)...")
+                        ProgressView(value: Double(current), total: Double(total))
+                            .padding(.horizontal, 40)
+                        Text("Loading \(current)/\(total)...")
                             .font(.headline)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                    .navigationTitle("Add Media")
+                    .navigationBarTitleDisplayMode(.inline)
+                }
 
-                case .previewing(let media):
+            case .previewing(let media):
+                NavigationStack {
                     PreviewView(media: media) {
                         Task {
                             await uploadMedia(media)
@@ -43,8 +48,13 @@ struct MediaPickerView: View {
                     } onRemove: { index in
                         removeItem(at: index, from: media)
                     }
+                    .background(Color(.systemBackground))
+                    .navigationTitle("Add Media")
+                    .navigationBarTitleDisplayMode(.inline)
+                }
 
-                case .uploading(let current, let total):
+            case .uploading(let current, let total):
+                NavigationStack {
                     VStack(spacing: 16) {
                         ProgressView(value: Double(current), total: Double(total))
                             .padding(.horizontal)
@@ -52,8 +62,13 @@ struct MediaPickerView: View {
                             .font(.headline)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                    .navigationTitle("Add Media")
+                    .navigationBarTitleDisplayMode(.inline)
+                }
 
-                case .error(let message):
+            case .error(let message):
+                NavigationStack {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.system(size: 50))
@@ -69,15 +84,9 @@ struct MediaPickerView: View {
                         .buttonStyle(.borderedProminent)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .navigationTitle("Add Media")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
+                    .background(Color(.systemBackground))
+                    .navigationTitle("Add Media")
+                    .navigationBarTitleDisplayMode(.inline)
                 }
             }
         }
@@ -88,8 +97,8 @@ struct MediaPickerView: View {
         case .cancelled:
             dismiss()
 
-        case .loading(let count):
-            state = .loadingMedia(count: count)
+        case .loading(let current, let total):
+            state = .loadingMedia(current: current, total: total)
 
         case .loaded(let media):
             state = .previewing(media)
@@ -169,9 +178,11 @@ struct PreviewView: View {
     let onRemove: (Int) -> Void
 
     var body: some View {
-        VStack(spacing: 16) {
-            ScrollView(.horizontal) {
-                HStack(spacing: 12) {
+        VStack(spacing: 20) {
+            ScrollView {
+                LazyVGrid(columns: [
+                    GridItem(.adaptive(minimum: 100), spacing: 12)
+                ], spacing: 12) {
                     ForEach(media.indices, id: \.self) { index in
                         ZStack {
                             if let image = media[index].image {
@@ -220,16 +231,20 @@ struct PreviewView: View {
                 .padding()
             }
 
-            Button("Add \(media.count) to Trip") {
-                onUpload()
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            VStack(spacing: 12) {
+                Button("Add \(media.count) to Trip") {
+                    onUpload()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
 
-            Button("Select Different Items") {
-                onSelectDifferent()
+                Button("Select Different Items") {
+                    onSelectDifferent()
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
+            .padding(.horizontal)
+            .padding(.bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

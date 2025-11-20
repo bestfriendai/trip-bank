@@ -4,7 +4,7 @@ import AVFoundation
 
 enum MediaPickerResult {
     case cancelled
-    case loading(count: Int)
+    case loading(current: Int, total: Int)
     case loaded([SelectedMediaItem])
 }
 
@@ -13,7 +13,7 @@ struct PHPickerView: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var config = PHPickerConfiguration(photoLibrary: .shared())
-        config.selectionLimit = 10
+        config.selectionLimit = 0  // 0 means no limit
         config.filter = .any(of: [.images, .videos])
 
         let picker = PHPickerViewController(configuration: config)
@@ -40,14 +40,16 @@ struct PHPickerView: UIViewControllerRepresentable {
                 return
             }
 
-            // Immediately show loading state
-            onResult(.loading(count: results.count))
-
             // Load media in background
             Task {
                 var media: [SelectedMediaItem] = []
 
                 for (index, result) in results.enumerated() {
+                    // Update progress before loading each item
+                    await MainActor.run {
+                        onResult(.loading(current: index + 1, total: results.count))
+                    }
+
                     print("Loading item \(index + 1)/\(results.count)")
 
                     if result.itemProvider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
