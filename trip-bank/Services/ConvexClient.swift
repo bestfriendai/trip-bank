@@ -187,6 +187,10 @@ class ConvexClient {
         return try await callMutation("auth:syncUser")
     }
 
+    func deleteAccount() async throws {
+        let _: [String: String] = try await callMutation("auth:deleteAccount")
+    }
+
     // MARK: - File Storage
 
     /// Generate an upload URL for file storage

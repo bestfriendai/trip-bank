@@ -4,6 +4,10 @@ import Clerk
 struct ProfileSettingsView: View {
     @Environment(\.clerk) private var clerk
     @Environment(\.dismiss) private var dismiss
+    @State private var showingSignOutConfirmation = false
+    @State private var showingDeleteAccountConfirmation = false
+    @State private var showingFinalDeleteWarning = false
+    @State private var isDeleting = false
 
     var body: some View {
         NavigationStack {
@@ -57,17 +61,6 @@ struct ProfileSettingsView: View {
                     Text("Account")
                 }
 
-                // Friends Section (Coming Soon)
-                Section {
-                    NavigationLink {
-                        ComingSoonView(feature: "Friends Management")
-                    } label: {
-                        Label("Friends", systemImage: "person.2.fill")
-                    }
-                } header: {
-                    Text("Social")
-                }
-
                 // Subscription Section (Coming Soon)
                 Section {
                     NavigationLink {
@@ -114,15 +107,28 @@ struct ProfileSettingsView: View {
                 // Sign Out Section
                 Section {
                     Button(role: .destructive) {
-                        Task {
-                            try? await clerk.signOut()
-                        }
+                        showingSignOutConfirmation = true
                     } label: {
                         HStack {
                             Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                             Spacer()
                         }
                     }
+                }
+
+                // Delete Account Section
+                Section {
+                    Button(role: .destructive) {
+                        showingDeleteAccountConfirmation = true
+                    } label: {
+                        HStack {
+                            Label("Delete Account", systemImage: "trash.fill")
+                            Spacer()
+                        }
+                    }
+                } footer: {
+                    Text("Permanently delete your account and all associated data. This action cannot be undone.")
+                        .font(.caption)
                 }
             }
             .navigationTitle("Profile & Settings")
@@ -134,7 +140,78 @@ struct ProfileSettingsView: View {
                     }
                 }
             }
+            .alert("Sign Out?", isPresented: $showingSignOutConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Sign Out", role: .destructive) {
+                    Task {
+                        try? await clerk.signOut()
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to sign out?")
+            }
+            .alert("Delete Account?", isPresented: $showingDeleteAccountConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    showingFinalDeleteWarning = true
+                }
+            } message: {
+                Text("This will permanently delete your account and all your trips, photos, and data.")
+            }
+            .alert("Are You Absolutely Sure?", isPresented: $showingFinalDeleteWarning) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete Everything", role: .destructive) {
+                    Task {
+                        await deleteAccount()
+                    }
+                }
+            } message: {
+                Text("This action CANNOT be undone. All your data will be permanently deleted.")
+            }
+            .disabled(isDeleting)
+            .overlay {
+                if isDeleting {
+                    ZStack {
+                        Color.black.opacity(0.4)
+                            .ignoresSafeArea()
+
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .scaleEffect(1.5)
+                                .tint(.white)
+                            Text("Deleting account...")
+                                .foregroundStyle(.white)
+                                .font(.headline)
+                        }
+                        .padding(32)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(.ultraThinMaterial)
+                        )
+                    }
+                }
+            }
         }
+    }
+
+    private func deleteAccount() async {
+        isDeleting = true
+
+        do {
+            // Delete all user data from Convex
+            try await ConvexClient.shared.deleteAccount()
+
+            // Delete account from Clerk
+            try await clerk.user?.delete()
+
+            // User will be automatically signed out when account is deleted
+        } catch {
+            print("❌ Error deleting account: \(error)")
+            // Even if there's an error, try to sign out
+            try? await clerk.signOut()
+        }
+
+        isDeleting = false
     }
 }
 

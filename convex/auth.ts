@@ -120,3 +120,90 @@ export const getCurrentUser = query({
     return user;
   },
 });
+
+// Mutation to delete user account and all associated data
+export const deleteAccount = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireAuth(ctx);
+
+    // 1. Get all trips owned by this user
+    const ownedTrips = await ctx.db
+      .query("trips")
+      .withIndex("by_ownerId", (q) => q.eq("ownerId", userId))
+      .collect();
+
+    // 2. Delete all owned trips and their data
+    for (const trip of ownedTrips) {
+      // Delete moments for this trip
+      const moments = await ctx.db
+        .query("moments")
+        .withIndex("by_tripId", (q) => q.eq("tripId", trip.tripId))
+        .collect();
+
+      for (const moment of moments) {
+        await ctx.db.delete(moment._id);
+      }
+
+      // Delete media items for this trip
+      const mediaItems = await ctx.db
+        .query("mediaItems")
+        .withIndex("by_tripId", (q) => q.eq("tripId", trip.tripId))
+        .collect();
+
+      for (const mediaItem of mediaItems) {
+        // Delete from storage if exists
+        if (mediaItem.storageId) {
+          try {
+            await ctx.storage.delete(mediaItem.storageId);
+          } catch (error) {
+            console.error(`Failed to delete storage file ${mediaItem.storageId}:`, error);
+          }
+        }
+        if (mediaItem.thumbnailStorageId) {
+          try {
+            await ctx.storage.delete(mediaItem.thumbnailStorageId);
+          } catch (error) {
+            console.error(`Failed to delete thumbnail ${mediaItem.thumbnailStorageId}:`, error);
+          }
+        }
+        await ctx.db.delete(mediaItem._id);
+      }
+
+      // Delete permissions for this trip
+      const permissions = await ctx.db
+        .query("tripPermissions")
+        .withIndex("by_tripId", (q) => q.eq("tripId", trip.tripId))
+        .collect();
+
+      for (const permission of permissions) {
+        await ctx.db.delete(permission._id);
+      }
+
+      // Delete the trip itself
+      await ctx.db.delete(trip._id);
+    }
+
+    // 3. Delete all permissions where user is a member (not owner)
+    const userPermissions = await ctx.db
+      .query("tripPermissions")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .collect();
+
+    for (const permission of userPermissions) {
+      await ctx.db.delete(permission._id);
+    }
+
+    // 4. Delete user record
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", userId))
+      .first();
+
+    if (user) {
+      await ctx.db.delete(user._id);
+    }
+
+    return { success: true };
+  },
+});
