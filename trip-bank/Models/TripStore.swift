@@ -10,7 +10,7 @@ class TripStore: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    private let convexClient = ConvexRealtimeClient.shared
+    private let convexClient = ConvexClient.shared
     private var cancellables = Set<AnyCancellable>()
 
     // Keep track of individual trip subscriptions
@@ -37,7 +37,7 @@ class TripStore: ObservableObject {
             await convexClient.ensureLoggedIn()
 
             await MainActor.run {
-                let subscription = convexClient.subscribe(to: "trips:getAllTrips", yielding: [ConvexTrip].self)
+                let subscription = convexClient.subscribe(to: "trips/trips:getAllTrips", yielding: [ConvexTrip].self)
                     .receive(on: DispatchQueue.main)
                     .sink(
                         receiveCompletion: { [weak self] completion in
@@ -99,7 +99,7 @@ class TripStore: ObservableObject {
         print("📡 [TripStore] Subscribing to trip details for \(tripId)")
 
         let subscription = convexClient.subscribe(
-            to: "trips:getTrip",
+            to: "trips/trips:getTrip",
             with: ["tripId": tripId],
             yielding: TripDetailsResponse.self
         )
@@ -166,7 +166,7 @@ class TripStore: ObservableObject {
         }
 
         let body: [String: Any] = [
-            "path": "trips:getTrip",
+            "path": "trips/trips:getTrip",
             "args": ["tripId": id]
         ]
 

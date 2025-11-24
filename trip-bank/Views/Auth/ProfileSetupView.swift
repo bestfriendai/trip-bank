@@ -186,7 +186,7 @@ struct ProfileSetupView: View {
             try await clerk.user?.reload()
 
             // Sync updated profile to Convex
-            _ = try? await ConvexRealtimeClient.shared.syncUser()
+            _ = try? await ConvexClient.shared.syncUser()
 
             // Mark setup as complete
             markSetupComplete()

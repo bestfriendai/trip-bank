@@ -360,7 +360,7 @@ struct TripCanvasView: View {
         // Save ALL reflowed moments to backend
         Task {
             do {
-                _ = try await ConvexRealtimeClient.shared.batchUpdateMomentGridPositions(updates: reflowedMoments.map { ($0.id.uuidString, $0.gridPosition) })
+                _ = try await ConvexClient.shared.batchUpdateMomentGridPositions(updates: reflowedMoments.map { ($0.id.uuidString, $0.gridPosition) })
             } catch {
                 print("❌ Failed to update moment positions: \(error)")
             }
@@ -434,7 +434,7 @@ struct TripCanvasView: View {
                 if let tripIndex = tripStore.trips.firstIndex(where: { $0.id == trip.id }) {
                     let reflowedMoments = tripStore.trips[tripIndex].moments
 
-                    _ = try await ConvexRealtimeClient.shared.batchUpdateMomentGridPositions(updates: reflowedMoments.map { ($0.id.uuidString, $0.gridPosition) })
+                    _ = try await ConvexClient.shared.batchUpdateMomentGridPositions(updates: reflowedMoments.map { ($0.id.uuidString, $0.gridPosition) })
                 }
             } catch {
                 print("❌ Failed to update moment sizes: \(error)")

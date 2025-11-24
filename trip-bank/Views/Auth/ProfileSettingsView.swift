@@ -199,7 +199,7 @@ struct ProfileSettingsView: View {
 
         do {
             // Delete all user data from Convex
-            try await ConvexRealtimeClient.shared.deleteAccount()
+            try await ConvexClient.shared.deleteAccount()
 
             // Delete account from Clerk
             try await clerk.user?.delete()

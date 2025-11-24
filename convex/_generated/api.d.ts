@@ -10,8 +10,12 @@
 
 import type * as auth from "../auth.js";
 import type * as files from "../files.js";
-import type * as migrations from "../migrations.js";
-import type * as trips from "../trips.js";
+import type * as trips_media from "../trips/media.js";
+import type * as trips_moments from "../trips/moments.js";
+import type * as trips_permissions from "../trips/permissions.js";
+import type * as trips_public from "../trips/public.js";
+import type * as trips_sharing from "../trips/sharing.js";
+import type * as trips_trips from "../trips/trips.js";
 
 import type {
   ApiFromModules,
@@ -22,8 +26,12 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   files: typeof files;
-  migrations: typeof migrations;
-  trips: typeof trips;
+  "trips/media": typeof trips_media;
+  "trips/moments": typeof trips_moments;
+  "trips/permissions": typeof trips_permissions;
+  "trips/public": typeof trips_public;
+  "trips/sharing": typeof trips_sharing;
+  "trips/trips": typeof trips_trips;
 }>;
 
 /**

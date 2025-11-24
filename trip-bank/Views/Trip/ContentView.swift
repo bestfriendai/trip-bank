@@ -54,7 +54,7 @@ struct ContentView: View {
 
     private func syncUserToConvex() async {
         do {
-            let user = try await ConvexRealtimeClient.shared.syncUser()
+            let user = try await ConvexClient.shared.syncUser()
             print("✅ User synced to Convex: \(user?.email ?? "unknown")")
         } catch {
             print("❌ Failed to sync user to Convex: \(error)")
@@ -286,10 +286,10 @@ struct ContentView: View {
 
         Task {
             // Ensure authentication before subscribing
-            await ConvexRealtimeClient.shared.ensureLoggedIn()
+            await ConvexClient.shared.ensureLoggedIn()
 
-            sharedTripsSubscription = ConvexRealtimeClient.shared.subscribe(
-                to: "trips:getSharedTrips",
+            sharedTripsSubscription = ConvexClient.shared.subscribe(
+                to: "trips/sharing:getSharedTrips",
                 yielding: [ConvexTrip].self
             )
             .receive(on: DispatchQueue.main)
@@ -344,7 +344,7 @@ struct ContentView: View {
         }
 
         let body: [String: Any] = [
-            "path": "trips:getTrip",
+            "path": "trips/trips:getTrip",
             "args": ["tripId": id]
         ]
 
@@ -403,7 +403,7 @@ struct ContentView: View {
     private func handleDeepLinkJoin(slug: String) {
         Task {
             do {
-                let response = try await ConvexRealtimeClient.shared.joinTripViaLink(
+                let response = try await ConvexClient.shared.joinTripViaLink(
                     shareSlug: slug,
                     shareCode: nil
                 )

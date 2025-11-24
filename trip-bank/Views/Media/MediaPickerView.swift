@@ -119,7 +119,7 @@ struct MediaPickerView: View {
     }
 
     private func uploadMedia(_ media: [SelectedMediaItem]) async {
-        let convexClient = ConvexRealtimeClient.shared
+        let convexClient = ConvexClient.shared
         var newMediaItems: [MediaItem] = []
 
         for (index, item) in media.enumerated() {

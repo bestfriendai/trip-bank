@@ -124,7 +124,7 @@ struct ManageAccessView: View {
         errorMessage = nil
 
         do {
-            permissions = try await ConvexRealtimeClient.shared.getTripPermissions(tripId: trip.id.uuidString)
+            permissions = try await ConvexClient.shared.getTripPermissions(tripId: trip.id.uuidString)
         } catch {
             errorMessage = error.localizedDescription
             print("Error loading permissions: \(error)")
@@ -135,7 +135,7 @@ struct ManageAccessView: View {
 
     private func updateRole(permission: TripPermissionWithUser, newRole: String) async {
         do {
-            _ = try await ConvexRealtimeClient.shared.updatePermission(
+            _ = try await ConvexClient.shared.updatePermission(
                 tripId: trip.id.uuidString,
                 userId: permission.userId,
                 newRole: newRole
@@ -151,7 +151,7 @@ struct ManageAccessView: View {
 
     private func removeUser(permission: TripPermissionWithUser) async {
         do {
-            _ = try await ConvexRealtimeClient.shared.removeAccess(
+            _ = try await ConvexClient.shared.removeAccess(
                 tripId: trip.id.uuidString,
                 userId: permission.userId
             )

@@ -192,11 +192,11 @@ struct TripDetailView: View {
     private func subscribeToPermissions() {
         Task {
             // Ensure authentication before subscribing
-            await ConvexRealtimeClient.shared.ensureLoggedIn()
+            await ConvexClient.shared.ensureLoggedIn()
 
             // Subscribe to permission changes
-            permissionsSubscription = ConvexRealtimeClient.shared.subscribe(
-                to: "trips:getTripPermissions",
+            permissionsSubscription = ConvexClient.shared.subscribe(
+                to: "trips/sharing:getTripPermissions",
                 with: ["tripId": trip.id.uuidString],
                 yielding: [TripPermissionWithUser].self
             )
