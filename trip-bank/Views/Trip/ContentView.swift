@@ -320,7 +320,7 @@ struct ContentView: View {
 
     private func fetchTripDetails(id: String) async throws -> Trip? {
         // Use HTTP query for initial fetch
-        let url = URL(string: "https://flippant-mongoose-94.convex.cloud/api/query")!
+        let url = URL(string: "\(ConvexClient.baseURL)/api/query")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

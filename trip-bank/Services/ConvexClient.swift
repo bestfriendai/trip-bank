@@ -14,9 +14,9 @@ class ConvexClient {
     static let shared = ConvexClient()
 
     #if DEBUG
-    private let baseURL = "https://flippant-mongoose-94.convex.cloud"
+    static let baseURL = "https://flippant-mongoose-94.convex.cloud"
     #else
-    private let baseURL = "https://silent-hare-226.convex.cloud"
+    static let baseURL = "https://silent-hare-226.convex.cloud"
     #endif
     private var convexClient: ConvexClientWithAuth<String>!
     private var cancellables = Set<AnyCancellable>()
@@ -28,7 +28,7 @@ class ConvexClient {
         // Initialize the Convex client with Clerk authentication
         let authProvider = ClerkAuthProvider()
         convexClient = ConvexClientWithAuth(
-            deploymentUrl: baseURL,
+            deploymentUrl: ConvexClient.baseURL,
             authProvider: authProvider
         )
     }
@@ -76,7 +76,7 @@ class ConvexClient {
     private func mutation<T: Decodable>(_ functionName: String, args: [String: Any] = [:]) async throws -> T {
         try await ensureAuthenticated()
 
-        let url = URL(string: "\(baseURL)/api/mutation")!
+        let url = URL(string: "\(Self.baseURL)/api/mutation")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -346,7 +346,7 @@ class ConvexClient {
     func getTripPermissions(tripId: String) async throws -> [TripPermissionWithUser] {
         // For permissions, we still use HTTP query for now
         // Could be converted to subscription if needed
-        let url = URL(string: "\(baseURL)/api/query")!
+        let url = URL(string: "\(Self.baseURL)/api/query")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -390,7 +390,7 @@ class ConvexClient {
         }
 
         // Use HTTP query instead of mutation since getFileUrl is a query
-        let requestURL = URL(string: "\(baseURL)/api/query")!
+        let requestURL = URL(string: "\(Self.baseURL)/api/query")!
         var request = URLRequest(url: requestURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -510,7 +510,7 @@ class ConvexClient {
 
     /// Get current user's storage usage
     func getStorageUsage() async throws -> StorageUsageResponse? {
-        let url = URL(string: "\(baseURL)/api/query")!
+        let url = URL(string: "\(Self.baseURL)/api/query")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
