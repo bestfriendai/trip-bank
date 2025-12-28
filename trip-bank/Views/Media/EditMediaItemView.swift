@@ -61,7 +61,7 @@ struct EditMediaItemView: View {
         }
     }
 
-    // ✅ FIXED: Add loading state during save
+    // ✅ FIXED: Add loading state during save with proper async handling
     private func saveChanges() {
         isSaving = true
 
@@ -70,10 +70,17 @@ struct EditMediaItemView: View {
         updatedMediaItem.captureDate = captureDate
 
         Task {
-            tripStore.updateMediaItem(in: trip.id, mediaItem: updatedMediaItem)
-            await MainActor.run {
-                isSaving = false
-                dismiss()
+            do {
+                try await tripStore.updateMediaItemAsync(in: trip.id, mediaItem: updatedMediaItem)
+                await MainActor.run {
+                    isSaving = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isSaving = false
+                    // Error is handled by TripStore
+                }
             }
         }
     }

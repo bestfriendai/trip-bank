@@ -38,6 +38,9 @@ export const addMediaItem = mutation({
       throw new Error("You don't have permission to add media to this trip");
     }
 
+    // Calculate file size once (used for both validation and storage update)
+    const newFileSize = (args.fileSize || 0) + (args.thumbnailSize || 0);
+
     // Get user to check storage limit
     const user = await ctx.db
       .query("users")
@@ -47,7 +50,6 @@ export const addMediaItem = mutation({
     if (user) {
       const tier = user.subscriptionTier || "free";
       const limit = STORAGE_LIMITS[tier];
-      const newFileSize = (args.fileSize || 0) + (args.thumbnailSize || 0);
 
       // ✅ Validate file size is non-negative
       if (newFileSize < 0) {
@@ -93,7 +95,6 @@ export const addMediaItem = mutation({
 
     // ✅ Update storage usage AFTER successful insert (more atomic)
     if (user) {
-      const newFileSize = (args.fileSize || 0) + (args.thumbnailSize || 0);
       // Re-fetch to get current value and update
       const freshUser = await ctx.db.get(user._id);
       if (freshUser) {

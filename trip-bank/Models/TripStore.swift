@@ -245,12 +245,24 @@ class TripStore: ObservableObject {
         isLoading = true
 
         // Re-establish subscriptions which will fetch fresh data
+        // The subscription's receiveValue handler will update the data
         subscribeToTrips()
 
-        // Small delay to allow subscription to fire
-        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        // Wait for subscription to deliver initial data (with timeout)
+        // The isLoading flag will be set to false by the subscription handler
+        // We add a reasonable timeout to prevent indefinite loading state
+        let startTime = Date()
+        let timeout: TimeInterval = 10.0 // 10 second timeout
 
-        isLoading = false
+        while isLoading && Date().timeIntervalSince(startTime) < timeout {
+            try? await Task.sleep(nanoseconds: 100_000_000) // Check every 0.1 seconds
+        }
+
+        // If still loading after timeout, force stop loading state
+        if isLoading {
+            print("⚠️ [TripStore] Load timeout - forcing loading state to false")
+            isLoading = false
+        }
     }
 
     // MARK: - Create Trip
@@ -471,19 +483,24 @@ class TripStore: ObservableObject {
     func updateMediaItem(in tripID: UUID, mediaItem: MediaItem) {
         Task {
             do {
-                _ = try await convexClient.updateMediaItem(
-                    id: mediaItem.id.uuidString,
-                    note: mediaItem.note,
-                    captureDate: mediaItem.captureDate
-                )
-
-                // The subscription will automatically update
-                print("✅ [TripStore] Media item updated, waiting for subscription update...")
+                try await updateMediaItemAsync(in: tripID, mediaItem: mediaItem)
             } catch {
                 errorMessage = "Failed to update media item: \(error.localizedDescription)"
                 print("❌ [TripStore] Error updating media item: \(error)")
             }
         }
+    }
+
+    // ✅ ADDED: Async version for proper loading state handling
+    func updateMediaItemAsync(in tripID: UUID, mediaItem: MediaItem) async throws {
+        _ = try await convexClient.updateMediaItem(
+            id: mediaItem.id.uuidString,
+            note: mediaItem.note,
+            captureDate: mediaItem.captureDate
+        )
+
+        // The subscription will automatically update
+        print("✅ [TripStore] Media item updated, waiting for subscription update...")
     }
 
     // MARK: - Permissions

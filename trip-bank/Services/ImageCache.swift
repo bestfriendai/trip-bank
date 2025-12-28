@@ -129,9 +129,23 @@ actor ImageCache {
 
     private func saveToDisk(image: UIImage, key: String) {
         let path = diskPath(for: key)
-        guard let data = image.jpegData(compressionQuality: 0.9) else { return }
 
-        try? data.write(to: path, options: .atomic)
+        // ✅ FIXED: Preserve PNG transparency - check if image has alpha channel
+        let hasAlpha = image.cgImage?.alphaInfo != .none &&
+                       image.cgImage?.alphaInfo != .noneSkipFirst &&
+                       image.cgImage?.alphaInfo != .noneSkipLast
+
+        let data: Data?
+        if hasAlpha {
+            // Use PNG to preserve transparency
+            data = image.pngData()
+        } else {
+            // Use JPEG for better compression on non-transparent images
+            data = image.jpegData(compressionQuality: 0.9)
+        }
+
+        guard let imageData = data else { return }
+        try? imageData.write(to: path, options: .atomic)
     }
 
     // MARK: - Memory Management

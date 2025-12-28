@@ -5,11 +5,12 @@ import { canUserView, canUserEdit, isOwner } from "./permissions";
 
 // ============= VALIDATION HELPERS =============
 
-// Sanitize string to prevent XSS and limit length
+// Sanitize string by removing angle brackets and limiting length
+// Note: Primary XSS defense should be at render-time (React auto-escapes)
 const sanitizeString = (str: string, maxLength: number = 200): string => {
   return str
     .trim()
-    .replace(/[<>]/g, '') // Remove potential XSS characters
+    .replace(/[<>]/g, '') // Remove angle brackets as supplementary defense
     .substring(0, maxLength);
 };
 

@@ -117,12 +117,25 @@ extension View {
 
 // MARK: - High Contrast Support
 
-extension Color {
-    /// Return a high-contrast version for accessibility
-    var highContrast: Color {
-        // In a real app, you'd return different colors
-        // For now, just return self
-        return self
+extension View {
+    /// Check if high contrast mode is enabled and apply appropriate styling
+    @ViewBuilder
+    func highContrastBorder(color: Color = .primary, width: CGFloat = 1) -> some View {
+        self.modifier(HighContrastBorderModifier(color: color, width: width))
+    }
+}
+
+struct HighContrastBorderModifier: ViewModifier {
+    @Environment(\.colorSchemeContrast) var contrast
+    let color: Color
+    let width: CGFloat
+
+    func body(content: Content) -> some View {
+        if contrast == .increased {
+            content.border(color, width: width)
+        } else {
+            content
+        }
     }
 }
 
@@ -130,8 +143,14 @@ extension Color {
 
 enum AccessibilityAnnouncement {
     /// Announce a message to VoiceOver
+    /// - Parameters:
+    ///   - message: The message to announce
+    ///   - delay: Small delay to allow view updates to complete before announcing (default 0.1s)
+    /// - Note: Use this for dynamic content updates that VoiceOver users should be notified about,
+    ///         such as "Item saved successfully" or "3 photos selected"
     static func announce(_ message: String, delay: TimeInterval = 0.1) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             UIAccessibility.post(notification: .announcement, argument: message)
         }
     }
@@ -168,8 +187,13 @@ struct SkipToContentButton: View {
         Button(action: action) {
             Text("Skip to content")
         }
-        .accessibilityHidden(false)
-        .opacity(0) // Hidden visually but available to VoiceOver
-        .frame(width: 1, height: 1)
+        // Use accessibilityElement to ensure proper VoiceOver handling
+        .accessibilityElement()
+        .accessibilityLabel("Skip to main content")
+        .accessibilityHint("Double-tap to skip navigation and jump to main content")
+        .accessibilityAddTraits(.isButton)
+        // Visually hidden but accessible
+        .frame(width: 0, height: 0)
+        .clipped()
     }
 }

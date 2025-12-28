@@ -6,6 +6,10 @@ struct LoginView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
 
+    // ✅ FIXED: Use static URL constants to avoid force-unwrapping
+    private static let termsURL = URL(string: "https://rewinded.app/terms")!
+    private static let privacyURL = URL(string: "https://rewinded.app/privacy")!
+
     var body: some View {
         VStack(spacing: 30) {
             Spacer()
@@ -87,12 +91,12 @@ struct LoginView: View {
             Spacer()
 
             // Privacy Text with tappable links
-            // ✅ FIXED: Make Terms and Privacy Policy links tappable
+            // ✅ FIXED: Make Terms and Privacy Policy links tappable (using safe URL constants)
             HStack(spacing: 0) {
                 Text("By continuing, you agree to our ")
-                Link("Terms", destination: URL(string: "https://rewinded.app/terms")!)
+                Link("Terms", destination: Self.termsURL)
                 Text(" and ")
-                Link("Privacy Policy", destination: URL(string: "https://rewinded.app/privacy")!)
+                Link("Privacy Policy", destination: Self.privacyURL)
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
