@@ -96,11 +96,20 @@ struct TripCanvasView: View {
                 if geometry.size.width > 0 && geometry.size.height > 0 {
                     canvasSize = geometry.size
                 }
+            }
+            // ✅ FIXED: Use Task.sleep instead of DispatchQueue.asyncAfter (cancellable)
+            .task {
+                // Small delay for staggered entrance animations
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
 
-                // Trigger staggered entrance animations
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    for moment in trip.moments {
-                        appearingMoments.insert(moment.id)
+                // Check if task was cancelled (view disappeared)
+                guard !Task.isCancelled else { return }
+
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        for moment in trip.moments {
+                            appearingMoments.insert(moment.id)
+                        }
                     }
                 }
             }

@@ -10,6 +10,7 @@ struct MediaVideoView: View {
     @State private var isLoading = false
     @State private var loadFailed = false
     @State private var player: AVPlayer?
+    @State private var loopObserver: NSObjectProtocol? // ✅ Store observer for cleanup
     @StateObject private var audioManager = VideoAudioManager.shared
 
     private var isMuted: Bool {
@@ -30,8 +31,7 @@ struct MediaVideoView: View {
                         player.play()
                     }
                     .onDisappear {
-                        player.pause()
-                        audioManager.stopAudioPlayback(for: mediaItem.id)
+                        cleanupPlayer()
                     }
                     // Continuously enforce mute state
                     .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { _ in
@@ -130,22 +130,37 @@ struct MediaVideoView: View {
     }
 
     private func setupPlayer(url: URL) {
+        // ✅ Clean up any existing player first
+        cleanupPlayer()
+
         let player = AVPlayer(url: url)
         player.isMuted = true // Always start muted
         player.volume = 0.0 // Ensure no audio plays
         player.actionAtItemEnd = .none
 
-        // Loop video
-        NotificationCenter.default.addObserver(
+        // ✅ Store observer reference for cleanup
+        loopObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
-        ) { _ in
-            player.seek(to: .zero)
-            player.play()
+        ) { [weak player] _ in
+            player?.seek(to: .zero)
+            player?.play()
         }
 
         self.player = player
+    }
+
+    // ✅ Proper cleanup to prevent memory leaks
+    private func cleanupPlayer() {
+        if let observer = loopObserver {
+            NotificationCenter.default.removeObserver(observer)
+            loopObserver = nil
+        }
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        player = nil
+        audioManager.stopAudioPlayback(for: mediaItem.id)
     }
 
     private var placeholderView: some View {
@@ -166,6 +181,7 @@ struct CollageMediaVideoView: View {
     @State private var videoURL: URL?
     @State private var isLoading = false
     @State private var player: AVPlayer?
+    @State private var loopObserver: NSObjectProtocol? // ✅ Store observer for cleanup
 
     var body: some View {
         ZStack {
@@ -176,7 +192,7 @@ struct CollageMediaVideoView: View {
                         player.play()
                     }
                     .onDisappear {
-                        player.pause()
+                        cleanupPlayer()
                     }
             } else if isLoading {
                 ZStack {
@@ -229,20 +245,34 @@ struct CollageMediaVideoView: View {
     }
 
     private func setupPlayer(url: URL) {
+        // ✅ Clean up existing player first
+        cleanupPlayer()
+
         let player = AVPlayer(url: url)
         player.isMuted = true
         player.actionAtItemEnd = .none
 
-        // Loop video
-        NotificationCenter.default.addObserver(
+        // ✅ Store observer reference for cleanup
+        loopObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
-        ) { _ in
-            player.seek(to: .zero)
-            player.play()
+        ) { [weak player] _ in
+            player?.seek(to: .zero)
+            player?.play()
         }
 
         self.player = player
+    }
+
+    // ✅ Proper cleanup to prevent memory leaks
+    private func cleanupPlayer() {
+        if let observer = loopObserver {
+            NotificationCenter.default.removeObserver(observer)
+            loopObserver = nil
+        }
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        player = nil
     }
 }

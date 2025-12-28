@@ -26,6 +26,16 @@ class TripStore: ObservableObject {
         // Authentication and subscription will be triggered from ContentView
     }
 
+    // ✅ ADDED: Proper cleanup to prevent memory leaks
+    deinit {
+        // Cancel all subscriptions when TripStore is deallocated
+        cancellables.forEach { $0.cancel() }
+        cancellables.removeAll()
+
+        tripSubscriptions.values.forEach { $0.cancel() }
+        tripSubscriptions.removeAll()
+    }
+
     // MARK: - Real-Time Subscriptions
 
     /// Subscribe to real-time updates for the trip list
@@ -220,10 +230,27 @@ class TripStore: ObservableObject {
     }
 
     // MARK: - Manual Reload (for pull-to-refresh)
+    // ✅ FIXED: Actually refresh data instead of no-op
 
     func loadTrips() async {
-        // Subscriptions handle this automatically, but we can force a refresh
-        print("ℹ️ [TripStore] Manual refresh requested (subscriptions are already active)")
+        print("ℹ️ [TripStore] Manual refresh requested")
+
+        // Cancel existing subscriptions
+        cancellables.forEach { $0.cancel() }
+        cancellables.removeAll()
+
+        tripSubscriptions.values.forEach { $0.cancel() }
+        tripSubscriptions.removeAll()
+
+        isLoading = true
+
+        // Re-establish subscriptions which will fetch fresh data
+        subscribeToTrips()
+
+        // Small delay to allow subscription to fire
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+
+        isLoading = false
     }
 
     // MARK: - Create Trip
@@ -231,22 +258,27 @@ class TripStore: ObservableObject {
     func addTrip(_ trip: Trip) {
         Task {
             do {
-                // Save to backend
-                _ = try await convexClient.createTrip(
-                    id: trip.id.uuidString,
-                    title: trip.title,
-                    startDate: trip.startDate,
-                    endDate: trip.endDate,
-                    coverImageName: trip.coverImageName
-                )
-
-                // The subscription will automatically update the trips array
-                print("✅ [TripStore] Trip created, waiting for subscription update...")
+                try await addTripAsync(trip)
             } catch {
                 errorMessage = "Failed to create trip: \(error.localizedDescription)"
                 print("❌ [TripStore] Error creating trip: \(error)")
             }
         }
+    }
+
+    // ✅ ADDED: Async version for proper error handling
+    func addTripAsync(_ trip: Trip) async throws {
+        // Save to backend
+        _ = try await convexClient.createTrip(
+            id: trip.id.uuidString,
+            title: trip.title,
+            startDate: trip.startDate,
+            endDate: trip.endDate,
+            coverImageName: trip.coverImageName
+        )
+
+        // The subscription will automatically update the trips array
+        print("✅ [TripStore] Trip created, waiting for subscription update...")
     }
 
     // MARK: - Delete Trip
@@ -279,23 +311,28 @@ class TripStore: ObservableObject {
     func updateTrip(_ trip: Trip) {
         Task {
             do {
-                // Update on backend
-                _ = try await convexClient.updateTrip(
-                    id: trip.id.uuidString,
-                    title: trip.title,
-                    startDate: trip.startDate,
-                    endDate: trip.endDate,
-                    coverImageName: trip.coverImageName,
-                    coverImageStorageId: trip.coverImageStorageId
-                )
-
-                // The subscription will automatically update the trips array
-                print("✅ [TripStore] Trip updated, waiting for subscription update...")
+                try await updateTripAsync(trip)
             } catch {
                 errorMessage = "Failed to update trip: \(error.localizedDescription)"
                 print("❌ [TripStore] Error updating trip: \(error)")
             }
         }
+    }
+
+    // ✅ ADDED: Async version for proper error handling
+    func updateTripAsync(_ trip: Trip) async throws {
+        // Update on backend
+        _ = try await convexClient.updateTrip(
+            id: trip.id.uuidString,
+            title: trip.title,
+            startDate: trip.startDate,
+            endDate: trip.endDate,
+            coverImageName: trip.coverImageName,
+            coverImageStorageId: trip.coverImageStorageId
+        )
+
+        // The subscription will automatically update the trips array
+        print("✅ [TripStore] Trip updated, waiting for subscription update...")
     }
 
     // MARK: - Media Items

@@ -279,18 +279,21 @@ struct ContentView: View {
                 yielding: [ConvexTrip].self
             )
             .receive(on: DispatchQueue.main)
+            // ✅ FIXED: Use [weak self] to prevent strong reference cycle
             .sink(
-                receiveCompletion: { [self] completion in
+                receiveCompletion: { [weak self] completion in
+                    guard let self = self else { return }
                     if case .failure(let error) = completion {
                         print("❌ [ContentView] Shared trips subscription error: \(error)")
                     }
-                    isLoadingShared = false
+                    self.isLoadingShared = false
                 },
-                receiveValue: { [self] convexTrips in
+                receiveValue: { [weak self] convexTrips in
+                    guard let self = self else { return }
                     print("✅ [ContentView] Received \(convexTrips.count) shared trips from subscription")
 
-                    Task {
-                        await updateSharedTripsWithDetails(convexTrips)
+                    Task { [weak self] in
+                        await self?.updateSharedTripsWithDetails(convexTrips)
                     }
                 }
             )

@@ -103,7 +103,7 @@ export const getPublicPreview = query({
       .withIndex("by_tripId", (q) => q.eq("tripId", trip.tripId))
       .collect();
 
-    // Get user info for each permission
+    // Get user info for each permission (SECURITY: Only expose non-sensitive data)
     const collaborators = await Promise.all(
       permissions.map(async (permission) => {
         const user = await ctx.db
@@ -111,12 +111,12 @@ export const getPublicPreview = query({
           .withIndex("by_clerkId", (q) => q.eq("clerkId", permission.userId))
           .first();
 
+        // ✅ SECURITY FIX: Never expose userId or email to public endpoints
         return {
-          userId: permission.userId,
           role: permission.role,
           name: user?.name || null,
-          email: user?.email || null,
           imageUrl: user?.imageUrl || null,
+          // ❌ REMOVED: userId, email - GDPR/Privacy violation
         };
       })
     );

@@ -3,6 +3,39 @@ import { v } from "convex/values";
 import { requireAuth } from "../auth";
 import { canUserView, canUserEdit, isOwner } from "./permissions";
 
+// ============= VALIDATION HELPERS =============
+
+// Sanitize string to prevent XSS and limit length
+const sanitizeString = (str: string, maxLength: number = 200): string => {
+  return str
+    .trim()
+    .replace(/[<>]/g, '') // Remove potential XSS characters
+    .substring(0, maxLength);
+};
+
+// Validate date range
+const validateDateRange = (startDate: number, endDate: number): void => {
+  if (endDate < startDate) {
+    throw new Error("End date must be after start date");
+  }
+  // Prevent dates too far in future (10 years)
+  const maxDate = Date.now() + (10 * 365 * 24 * 60 * 60 * 1000);
+  if (startDate > maxDate || endDate > maxDate) {
+    throw new Error("Date is too far in the future");
+  }
+  // Prevent dates too far in past (100 years)
+  const minDate = Date.now() - (100 * 365 * 24 * 60 * 60 * 1000);
+  if (startDate < minDate || endDate < minDate) {
+    throw new Error("Date is too far in the past");
+  }
+};
+
+// Validate UUID format
+const isValidUUID = (str: string): boolean => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
 // ============= TRIP MUTATIONS =============
 
 // Create a new trip
@@ -18,13 +51,28 @@ export const createTrip = mutation({
   handler: async (ctx, args) => {
     const userId = await requireAuth(ctx);
 
+    // ✅ INPUT VALIDATION
+    // Validate tripId format (UUID)
+    if (!isValidUUID(args.tripId)) {
+      throw new Error("Invalid trip ID format");
+    }
+
+    // Sanitize and validate title
+    const title = sanitizeString(args.title, 100);
+    if (title.length < 1) {
+      throw new Error("Trip title is required");
+    }
+
+    // Validate date range
+    validateDateRange(args.startDate, args.endDate);
+
     const now = Date.now();
 
     const tripDocId = await ctx.db.insert("trips", {
       userId, // Keep for backward compatibility
       ownerId: userId, // New owner field
       tripId: args.tripId,
-      title: args.title,
+      title, // ✅ Use sanitized title
       startDate: args.startDate,
       endDate: args.endDate,
       coverImageName: args.coverImageName,
@@ -76,11 +124,26 @@ export const updateTrip = mutation({
       throw new Error("You don't have permission to edit this trip");
     }
 
+    // ✅ Validate updates before applying
+    if (args.startDate !== undefined && args.endDate !== undefined) {
+      validateDateRange(args.startDate, args.endDate);
+    } else if (args.startDate !== undefined) {
+      validateDateRange(args.startDate, trip.endDate);
+    } else if (args.endDate !== undefined) {
+      validateDateRange(trip.startDate, args.endDate);
+    }
+
     const updates: any = {
       updatedAt: Date.now(),
     };
 
-    if (args.title !== undefined) updates.title = args.title;
+    if (args.title !== undefined) {
+      const title = sanitizeString(args.title, 100);
+      if (title.length < 1) {
+        throw new Error("Trip title is required");
+      }
+      updates.title = title;
+    }
     if (args.startDate !== undefined) updates.startDate = args.startDate;
     if (args.endDate !== undefined) updates.endDate = args.endDate;
     if (args.coverImageName !== undefined) updates.coverImageName = args.coverImageName;
