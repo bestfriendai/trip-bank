@@ -97,6 +97,34 @@ struct MomentCardView: View {
                 .onChanged { _ in isPressed = true }
                 .onEnded { _ in isPressed = false }
         )
+        // ✅ ACCESSIBILITY: Add comprehensive accessibility support
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("Double tap to view moment details")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    // ✅ ACCESSIBILITY: Build descriptive label for VoiceOver
+    private var accessibilityLabel: String {
+        var components: [String] = ["Moment: \(moment.title)"]
+
+        if let placeName = moment.placeName {
+            components.append("at \(placeName)")
+        }
+
+        if let note = moment.note, !note.isEmpty {
+            components.append(note)
+        }
+
+        let mediaCount = mediaItems.count
+        if mediaCount == 1 {
+            let type = mediaItems.first?.type == .video ? "video" : "photo"
+            components.append("1 \(type)")
+        } else if mediaCount > 1 {
+            components.append("\(mediaCount) photos and videos")
+        }
+
+        return components.joined(separator: ", ")
     }
 
     @ViewBuilder
@@ -223,6 +251,10 @@ struct MuteButton: View {
                     toggleMute()
                 }
         )
+        // ✅ ACCESSIBILITY: Add label for mute button
+        .accessibilityLabel(isMuted ? "Unmute video" : "Mute video")
+        .accessibilityHint(isMuted ? "Double tap to play audio" : "Double tap to mute audio")
+        .accessibilityAddTraits(.isButton)
     }
 
     private func toggleMute() {

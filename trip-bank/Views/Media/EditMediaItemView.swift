@@ -9,6 +9,7 @@ struct EditMediaItemView: View {
 
     @State private var note: String
     @State private var captureDate: Date
+    @State private var isSaving = false  // ✅ FIXED: Add loading state
 
     init(trip: Trip, mediaItem: MediaItem) {
         self.trip = trip
@@ -47,21 +48,34 @@ struct EditMediaItemView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveChanges()
+                    // ✅ FIXED: Show loading state while saving
+                    if isSaving {
+                        ProgressView()
+                    } else {
+                        Button("Save") {
+                            saveChanges()
+                        }
                     }
                 }
             }
         }
     }
 
+    // ✅ FIXED: Add loading state during save
     private func saveChanges() {
+        isSaving = true
+
         var updatedMediaItem = mediaItem
         updatedMediaItem.note = note.isEmpty ? nil : note
         updatedMediaItem.captureDate = captureDate
 
-        tripStore.updateMediaItem(in: trip.id, mediaItem: updatedMediaItem)
-        dismiss()
+        Task {
+            tripStore.updateMediaItem(in: trip.id, mediaItem: updatedMediaItem)
+            await MainActor.run {
+                isSaving = false
+                dismiss()
+            }
+        }
     }
 }
 

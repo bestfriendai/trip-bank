@@ -21,7 +21,8 @@ struct ManageAccessView: View {
     }
 
     var body: some View {
-        NavigationView {
+        // ✅ FIXED: Use NavigationStack instead of deprecated NavigationView
+        NavigationStack {
             ZStack {
                 if isLoading {
                     VStack(spacing: 16) {

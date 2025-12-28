@@ -53,6 +53,21 @@ struct MediaImageView: View {
         .task {
             await loadImage()
         }
+        // ✅ ACCESSIBILITY: Add description for images
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    // ✅ ACCESSIBILITY: Build description for VoiceOver
+    private var accessibilityDescription: String {
+        if isLoading {
+            return "Loading image"
+        } else if loadFailed {
+            return "Image failed to load"
+        } else if imageURL != nil {
+            return mediaItem.type == .video ? "Video thumbnail" : "Photo"
+        } else {
+            return "Image placeholder"
+        }
     }
 
     private func loadImage() async {

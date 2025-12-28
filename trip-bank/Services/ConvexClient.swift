@@ -475,16 +475,24 @@ class ConvexClient {
     }
 
     /// Upload a video to Convex storage and return size
+    /// ✅ FIXED: Stream upload instead of loading entire video into memory
     func uploadVideoWithSize(_ videoURL: URL) async throws -> UploadResult {
-        // 1. Read video data
-        guard let videoData = try? Data(contentsOf: videoURL) else {
-            throw ConvexError.convexError(message: "Failed to read video file")
+        // 1. Get file size without loading into memory
+        let attributes = try FileManager.default.attributesOfItem(atPath: videoURL.path)
+        guard let fileSize = attributes[.size] as? Int else {
+            throw ConvexError.convexError(message: "Failed to read video file size")
+        }
+
+        // ✅ Check file size before upload (500MB limit)
+        let maxSize = 500 * 1024 * 1024
+        if fileSize > maxSize {
+            throw ConvexError.convexError(message: "Video too large. Maximum size is 500MB.")
         }
 
         // 2. Generate upload URL
         let uploadUrl = try await generateUploadUrl()
 
-        // 3. Upload the file
+        // 3. Upload the file using streaming (doesn't load into memory)
         guard let url = URL(string: uploadUrl) else {
             throw ConvexError.invalidResponse
         }
@@ -492,9 +500,9 @@ class ConvexClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("video/mp4", forHTTPHeaderField: "Content-Type")
-        request.httpBody = videoData
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        // ✅ Use upload(for:fromFile:) which streams the file
+        let (data, response) = try await URLSession.shared.upload(for: request, fromFile: videoURL)
 
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
@@ -503,7 +511,7 @@ class ConvexClient {
 
         // 4. Parse response to get storage ID
         let uploadResponse = try JSONDecoder().decode(UploadResponse.self, from: data)
-        return UploadResult(storageId: uploadResponse.storageId, fileSize: videoData.count)
+        return UploadResult(storageId: uploadResponse.storageId, fileSize: fileSize)
     }
 
     // MARK: - Storage & Subscription
@@ -556,6 +564,7 @@ class ConvexClient {
     }
 
     /// Compress image to reasonable size for storage
+    /// ✅ FIXED: Use modern UIGraphicsImageRenderer instead of deprecated API
     private func compressImage(_ image: UIImage, maxDimension: CGFloat = 1024, quality: CGFloat = 0.8) -> Data? {
         // Calculate new size maintaining aspect ratio
         let size = image.size
@@ -569,28 +578,56 @@ class ConvexClient {
             newSize = size
         }
 
-        // Resize image
-        UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-        defer { UIGraphicsEndImageContext() }
-
-        image.draw(in: CGRect(origin: .zero, size: newSize))
-        let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
+        // ✅ Use modern UIGraphicsImageRenderer API
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        let resizedImage = renderer.image { context in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
 
         // Compress to JPEG
-        return resizedImage?.jpegData(compressionQuality: quality)
+        return resizedImage.jpegData(compressionQuality: quality)
     }
 }
 
 // MARK: - URL Cache Actor
+// ✅ FIXED: Added TTL to prevent stale signed URLs
 
 actor ConvexURLCache {
-    private var cache: [String: String] = [:]
+    private struct CacheEntry {
+        let url: String
+        let timestamp: Date
+    }
+
+    private var cache: [String: CacheEntry] = [:]
+
+    // Convex signed URLs expire after 1 hour, so use 55 minutes TTL
+    private let ttl: TimeInterval = 55 * 60 // 55 minutes
 
     func get(_ key: String) -> String? {
-        return cache[key]
+        guard let entry = cache[key] else { return nil }
+
+        // Check if URL has expired
+        if Date().timeIntervalSince(entry.timestamp) > ttl {
+            cache.removeValue(forKey: key)
+            return nil
+        }
+
+        return entry.url
     }
 
     func set(_ key: String, value: String) {
-        cache[key] = value
+        cache[key] = CacheEntry(url: value, timestamp: Date())
+    }
+
+    func clear() {
+        cache.removeAll()
+    }
+
+    /// Remove expired entries (call periodically)
+    func pruneExpired() {
+        let now = Date()
+        cache = cache.filter { _, entry in
+            now.timeIntervalSince(entry.timestamp) <= ttl
+        }
     }
 }

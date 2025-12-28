@@ -9,7 +9,8 @@ struct ShareTripView: View {
     @State private var showingCopiedAlert = false
 
     var body: some View {
-        NavigationView {
+        // ✅ FIXED: Use NavigationStack instead of deprecated NavigationView
+        NavigationStack {
             VStack(spacing: 24) {
                 if isLoading {
                     VStack(spacing: 16) {
@@ -83,6 +84,10 @@ struct ShareTripView: View {
                                     .onTapGesture {
                                         copyToClipboard(info.shareCode)
                                     }
+                                    // ✅ ACCESSIBILITY: Add label for trip code
+                                    .accessibilityLabel("Trip code: \(info.shareCode.map { String($0) }.joined(separator: " "))")
+                                    .accessibilityHint("Double tap to copy trip code")
+                                    .accessibilityAddTraits(.isButton)
 
                                 Text("Tap to copy")
                                     .font(.caption2)
