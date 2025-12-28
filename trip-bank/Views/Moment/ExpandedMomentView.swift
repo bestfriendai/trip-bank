@@ -134,6 +134,9 @@ struct ExpandedMomentView: View {
                             .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                             .padding()
                     }
+                    // ✅ ACCESSIBILITY: Add label for close button
+                    .accessibilityLabel("Close moment view")
+                    .accessibilityHint("Double tap to close and return to trip")
                 }
                 .padding(.top, 8)
 
@@ -228,6 +231,9 @@ struct ExpandedMomentView: View {
         .preferredColorScheme(.dark)
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
+        // ✅ ACCESSIBILITY: Announce moment details when view appears
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityViewLabel)
         .onAppear {
             // Permissions are now computed properties
 
@@ -261,10 +267,34 @@ struct ExpandedMomentView: View {
         isPresented = false
     }
 
-    private func formatDate(_ date: Date) -> String {
+    // ✅ FIXED: Cache DateFormatter as static to avoid creating new instance on every call
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private func formatDate(_ date: Date) -> String {
+        Self.dateFormatter.string(from: date)
+    }
+
+    // ✅ ACCESSIBILITY: Build descriptive label for VoiceOver
+    private var accessibilityViewLabel: String {
+        var components: [String] = ["Viewing moment: \(currentMoment.title)"]
+
+        if let placeName = currentMoment.placeName {
+            components.append("at \(placeName)")
+        }
+
+        if let date = currentMoment.date {
+            components.append("on \(formatDate(date))")
+        }
+
+        if mediaItems.count > 1 {
+            components.append("Showing \(currentPhotoIndex + 1) of \(mediaItems.count) items")
+        }
+
+        return components.joined(separator: ", ")
     }
 }

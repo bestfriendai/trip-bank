@@ -4,6 +4,14 @@ import { requireAuth } from "../auth";
 import { canUserEdit } from "./permissions";
 import { STORAGE_LIMITS } from "../storage";
 
+// ✅ Helper function to format bytes for user-friendly messages
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
 // ============= MEDIA MUTATIONS =============
 
 // Add a media item to a trip
@@ -30,6 +38,9 @@ export const addMediaItem = mutation({
       throw new Error("You don't have permission to add media to this trip");
     }
 
+    // Calculate file size once (used for both validation and storage update)
+    const newFileSize = (args.fileSize || 0) + (args.thumbnailSize || 0);
+
     // Get user to check storage limit
     const user = await ctx.db
       .query("users")
@@ -39,17 +50,27 @@ export const addMediaItem = mutation({
     if (user) {
       const tier = user.subscriptionTier || "free";
       const limit = STORAGE_LIMITS[tier];
-      const currentUsage = user.storageUsedBytes || 0;
-      const newFileSize = (args.fileSize || 0) + (args.thumbnailSize || 0);
 
-      if (currentUsage + newFileSize > limit) {
-        throw new Error("Storage limit exceeded. Please upgrade to Pro for more storage.");
+      // ✅ Validate file size is non-negative
+      if (newFileSize < 0) {
+        throw new Error("Invalid file size");
       }
 
-      // Update user's storage usage
-      await ctx.db.patch(user._id, {
-        storageUsedBytes: currentUsage + newFileSize,
-      });
+      // ✅ Re-fetch user to get latest storage value (reduces race window)
+      const latestUser = await ctx.db.get(user._id);
+      if (!latestUser) {
+        throw new Error("User not found");
+      }
+
+      const currentUsage = latestUser.storageUsedBytes || 0;
+
+      if (currentUsage + newFileSize > limit) {
+        const remaining = Math.max(0, limit - currentUsage);
+        const remainingFormatted = formatBytes(remaining);
+        throw new Error(`Storage limit exceeded. You have ${remainingFormatted} remaining. Please upgrade to Pro for more storage.`);
+      }
+
+      // Note: Storage update is done atomically with the media insert below
     }
 
     const now = Date.now();
@@ -71,6 +92,17 @@ export const addMediaItem = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    // ✅ Update storage usage AFTER successful insert (more atomic)
+    if (user) {
+      // Re-fetch to get current value and update
+      const freshUser = await ctx.db.get(user._id);
+      if (freshUser) {
+        await ctx.db.patch(user._id, {
+          storageUsedBytes: (freshUser.storageUsedBytes || 0) + newFileSize,
+        });
+      }
+    }
 
     // Automatically set cover image if this is the first photo added to the trip
     if (args.type === "photo" && args.storageId) {

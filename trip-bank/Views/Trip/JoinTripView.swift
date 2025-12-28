@@ -9,7 +9,8 @@ struct JoinTripView: View {
     @State private var joinedTripId: String?
 
     var body: some View {
-        NavigationView {
+        // ✅ FIXED: Use NavigationStack instead of deprecated NavigationView
+        NavigationStack {
             VStack(spacing: 32) {
                 Spacer()
 
@@ -18,6 +19,8 @@ struct JoinTripView: View {
                     .font(.system(size: 70))
                     .foregroundStyle(.blue)
                     .padding(.bottom, 8)
+                    // ✅ ACCESSIBILITY: Mark as decorative
+                    .accessibilityHidden(true)
 
                 // Title & Description
                 VStack(spacing: 12) {
@@ -43,6 +46,9 @@ struct JoinTripView: View {
                                 .fill(Color(.systemGray6))
                         )
                         .disabled(isJoining)
+                        // ✅ ACCESSIBILITY: Add descriptive label
+                        .accessibilityLabel("Trip code")
+                        .accessibilityHint("Enter the 6-character trip code shared with you")
 
                     if let error = errorMessage {
                         HStack(spacing: 8) {
@@ -73,6 +79,9 @@ struct JoinTripView: View {
                 .controlSize(.large)
                 .disabled(tripCode.isEmpty || isJoining)
                 .padding(.horizontal, 40)
+                // ✅ ACCESSIBILITY: Add descriptive label
+                .accessibilityLabel(isJoining ? "Joining trip" : "Join trip")
+                .accessibilityHint(tripCode.isEmpty ? "Enter a trip code first" : "Double tap to join this trip")
 
                 Spacer()
 

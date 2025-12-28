@@ -44,6 +44,7 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_userId_createdAt", ["userId", "createdAt"])
     .index("by_ownerId", ["ownerId"])
+    .index("by_ownerId_createdAt", ["ownerId", "createdAt"]) // ✅ Added for sorted owner queries
     .index("by_shareSlug", ["shareSlug"])
     .index("by_shareCode", ["shareCode"]),
 

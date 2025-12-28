@@ -166,6 +166,7 @@ export const updateMomentGridPosition = mutation({
 });
 
 // Batch update moment grid positions (for reflow operations)
+// ✅ OPTIMIZED: Fixed N+1 query problem - now checks permission once
 export const batchUpdateMomentGridPositions = mutation({
   args: {
     updates: v.array(
@@ -184,28 +185,50 @@ export const batchUpdateMomentGridPositions = mutation({
     const userId = await requireAuth(ctx);
     const now = Date.now();
 
-    // Update all moments in batch
-    for (const update of args.updates) {
-      // Find the moment
-      const moment = await ctx.db
-        .query("moments")
-        .withIndex("by_momentId", (q) => q.eq("momentId", update.momentId))
-        .first();
-
-      if (!moment) {
-        throw new Error(`Moment not found: ${update.momentId}`);
-      }
-
-      // Check permission to edit trip
-      if (!(await canUserEdit(ctx, moment.tripId, userId))) {
-        throw new Error("You don't have permission to edit moments in this trip");
-      }
-
-      await ctx.db.patch(moment._id, {
-        gridPosition: update.gridPosition,
-        updatedAt: now,
-      });
+    if (args.updates.length === 0) {
+      return { success: true };
     }
+
+    // ✅ Fetch all moments in parallel (not sequentially)
+    const moments = await Promise.all(
+      args.updates.map((update) =>
+        ctx.db
+          .query("moments")
+          .withIndex("by_momentId", (q) => q.eq("momentId", update.momentId))
+          .first()
+      )
+    );
+
+    // ✅ Validate all moments exist
+    const validMoments = moments.filter((m): m is NonNullable<typeof m> => m !== null);
+    if (validMoments.length !== args.updates.length) {
+      const missingIds = args.updates
+        .filter((_, i) => !moments[i])
+        .map((u) => u.momentId);
+      throw new Error(`Moments not found: ${missingIds.join(", ")}`);
+    }
+
+    // ✅ Verify all moments belong to the same trip (for permission check)
+    const tripIds = [...new Set(validMoments.map((m) => m.tripId))];
+    if (tripIds.length !== 1) {
+      throw new Error("All moments must belong to the same trip");
+    }
+
+    // ✅ Check permission ONCE (not N times)
+    const tripId = tripIds[0];
+    if (!(await canUserEdit(ctx, tripId, userId))) {
+      throw new Error("You don't have permission to edit moments in this trip");
+    }
+
+    // ✅ Batch update all moments in parallel
+    await Promise.all(
+      args.updates.map((update, index) =>
+        ctx.db.patch(validMoments[index]._id, {
+          gridPosition: update.gridPosition,
+          updatedAt: now,
+        })
+      )
+    );
 
     return { success: true };
   },

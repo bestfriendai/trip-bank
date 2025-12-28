@@ -6,6 +6,7 @@ struct MediaImageView: View {
     @State private var imageURL: URL?
     @State private var isLoading = false
     @State private var loadFailed = false
+    @State private var asyncImageFailed = false  // Track AsyncImage failures
 
     var body: some View {
         Group {
@@ -23,6 +24,9 @@ struct MediaImageView: View {
                         image
                             .resizable()
                             .scaledToFill()
+                            .onAppear {
+                                asyncImageFailed = false
+                            }
                     case .failure(let error):
                         ZStack {
                             placeholderImage
@@ -33,6 +37,7 @@ struct MediaImageView: View {
                             }
                         }
                         .onAppear {
+                            asyncImageFailed = true
                             print("Failed to load image: \(url)")
                             print("Error: \(error)")
                         }
@@ -52,6 +57,21 @@ struct MediaImageView: View {
         }
         .task {
             await loadImage()
+        }
+        // ✅ ACCESSIBILITY: Add description for images
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    // ✅ ACCESSIBILITY: Build description for VoiceOver (tracks AsyncImage failures too)
+    private var accessibilityDescription: String {
+        if isLoading {
+            return "Loading image"
+        } else if loadFailed || asyncImageFailed {
+            return "Image failed to load"
+        } else if imageURL != nil {
+            return mediaItem.type == .video ? "Video thumbnail" : "Photo"
+        } else {
+            return "Image placeholder"
         }
     }
 

@@ -6,6 +6,10 @@ struct LoginView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
 
+    // ✅ FIXED: Use static URL constants to avoid force-unwrapping
+    private static let termsURL = URL(string: "https://rewinded.app/terms")!
+    private static let privacyURL = URL(string: "https://rewinded.app/privacy")!
+
     var body: some View {
         VStack(spacing: 30) {
             Spacer()
@@ -14,6 +18,8 @@ struct LoginView: View {
             Image(systemName: "camera.on.rectangle.fill")
                 .font(.system(size: 80))
                 .foregroundStyle(.blue.gradient)
+                // ✅ ACCESSIBILITY: Mark as decorative
+                .accessibilityHidden(true)
 
             // Title
             Text("Rewinded")
@@ -44,6 +50,9 @@ struct LoginView: View {
                     .cornerRadius(12)
                 }
                 .disabled(isLoading)
+                // ✅ ACCESSIBILITY: Add descriptive label
+                .accessibilityLabel("Sign in with Apple")
+                .accessibilityHint(isLoading ? "Sign in in progress" : "Double tap to sign in with your Apple ID")
 
                 // Google Sign In Button
                 Button(action: { signInWithGoogle() }) {
@@ -64,6 +73,9 @@ struct LoginView: View {
                     )
                 }
                 .disabled(isLoading)
+                // ✅ ACCESSIBILITY: Add descriptive label
+                .accessibilityLabel("Sign in with Google")
+                .accessibilityHint(isLoading ? "Sign in in progress" : "Double tap to sign in with your Google account")
             }
             .padding(.horizontal, 32)
 
@@ -78,13 +90,19 @@ struct LoginView: View {
 
             Spacer()
 
-            // Privacy Text
-            Text("By continuing, you agree to our Terms of Service and Privacy Policy")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-                .padding(.bottom, 20)
+            // Privacy Text with tappable links
+            // ✅ FIXED: Make Terms and Privacy Policy links tappable (using safe URL constants)
+            HStack(spacing: 0) {
+                Text("By continuing, you agree to our ")
+                Link("Terms", destination: Self.termsURL)
+                Text(" and ")
+                Link("Privacy Policy", destination: Self.privacyURL)
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 32)
+            .padding(.bottom, 20)
         }
         .padding()
     }

@@ -128,6 +128,7 @@ struct NewTripView: View {
         }
     }
 
+    // ✅ FIXED: Use async/await instead of DispatchQueue.asyncAfter
     private func createTrip() {
         isCreating = true
 
@@ -137,20 +138,25 @@ struct NewTripView: View {
             endDate: endDate
         )
 
-        tripStore.addTrip(newTrip)
+        Task {
+            do {
+                try await tripStore.addTripAsync(newTrip)
 
-        // Give a brief moment for the backend call to complete
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            isCreating = false
-
-            if tripStore.errorMessage != nil {
-                showError = true
-            } else {
-                dismiss()
+                await MainActor.run {
+                    isCreating = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isCreating = false
+                    tripStore.errorMessage = error.localizedDescription
+                    showError = true
+                }
             }
         }
     }
 
+    // ✅ FIXED: Use async/await instead of DispatchQueue.asyncAfter
     private func updateTrip() {
         guard let existingTrip = trip else { return }
         isCreating = true
@@ -166,16 +172,20 @@ struct NewTripView: View {
             updatedTrip.coverImageName = mediaItem.id.uuidString
         }
 
-        tripStore.updateTrip(updatedTrip)
+        Task {
+            do {
+                try await tripStore.updateTripAsync(updatedTrip)
 
-        // Give a brief moment for the backend call to complete
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            isCreating = false
-
-            if tripStore.errorMessage != nil {
-                showError = true
-            } else {
-                dismiss()
+                await MainActor.run {
+                    isCreating = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isCreating = false
+                    tripStore.errorMessage = error.localizedDescription
+                    showError = true
+                }
             }
         }
     }

@@ -6,6 +6,7 @@ struct AutoPlayVideoView: View {
     let videoURL: URL
     @State private var player: AVPlayer?
     @State private var isMuted = true
+    @State private var loopObserver: NSObjectProtocol? // ✅ Store observer for cleanup
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -16,7 +17,7 @@ struct AutoPlayVideoView: View {
                         player.play()
                     }
                     .onDisappear {
-                        player.pause()
+                        cleanupPlayer()
                     }
 
                 // Mute/unmute button
@@ -31,6 +32,7 @@ struct AutoPlayVideoView: View {
                         .background(Circle().fill(.black.opacity(0.5)))
                 }
                 .padding(8)
+                .accessibilityLabel(isMuted ? "Unmute video" : "Mute video")
             }
         }
         .onAppear {
@@ -39,57 +41,93 @@ struct AutoPlayVideoView: View {
     }
 
     private func setupPlayer() {
+        // ✅ Clean up any existing player first
+        cleanupPlayer()
+
         let player = AVPlayer(url: videoURL)
         player.isMuted = isMuted
         player.actionAtItemEnd = .none
 
-        // Loop video
-        NotificationCenter.default.addObserver(
+        // ✅ Store observer reference for cleanup
+        loopObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
-        ) { _ in
-            player.seek(to: .zero)
-            player.play()
+        ) { [weak player] _ in
+            player?.seek(to: .zero)
+            player?.play()
         }
 
         self.player = player
+    }
+
+    // ✅ Proper cleanup to prevent memory leaks
+    private func cleanupPlayer() {
+        if let observer = loopObserver {
+            NotificationCenter.default.removeObserver(observer)
+            loopObserver = nil
+        }
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        player = nil
     }
 }
 
 // Simpler non-interactive auto-play video for collages
+// ✅ FIXED: setupPlayer is now called via onAppear
 struct CollageVideoView: View {
     let videoURL: URL
     @State private var player: AVPlayer?
+    @State private var loopObserver: NSObjectProtocol? // ✅ Store observer for cleanup
 
     var body: some View {
-        if let player = player {
-            VideoPlayer(player: player)
-                .disabled(true)
-                .onAppear {
-                    player.play()
-                }
-                .onDisappear {
-                    player.pause()
-                }
+        Group {
+            if let player = player {
+                VideoPlayer(player: player)
+                    .disabled(true)
+            } else {
+                // Show placeholder while player is initializing
+                Color.gray.opacity(0.2)
+            }
+        }
+        .onAppear {
+            setupPlayer() // ✅ FIX: Actually call setupPlayer!
+            player?.play()
+        }
+        .onDisappear {
+            cleanupPlayer()
         }
     }
 
-    func setupPlayer() {
+    private func setupPlayer() {
+        // ✅ Clean up existing player first
+        cleanupPlayer()
+
         let player = AVPlayer(url: videoURL)
         player.isMuted = true
         player.actionAtItemEnd = .none
 
-        // Loop video
-        NotificationCenter.default.addObserver(
+        // ✅ Store observer reference for cleanup
+        loopObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
-        ) { _ in
-            player.seek(to: .zero)
-            player.play()
+        ) { [weak player] _ in
+            player?.seek(to: .zero)
+            player?.play()
         }
 
         self.player = player
+    }
+
+    // ✅ Proper cleanup to prevent memory leaks
+    private func cleanupPlayer() {
+        if let observer = loopObserver {
+            NotificationCenter.default.removeObserver(observer)
+            loopObserver = nil
+        }
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        player = nil
     }
 }

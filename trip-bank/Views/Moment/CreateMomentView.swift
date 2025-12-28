@@ -15,6 +15,7 @@ struct CreateMomentView: View {
     @State private var momentWidth: Double = 1
     @State private var momentHeight: Double = 1.5
     @State private var selectedMediaItems: Set<UUID> = []
+    @State private var isSaving = false  // ✅ FIXED: Add loading state
 
     private var isEditing: Bool {
         moment != nil
@@ -93,20 +94,28 @@ struct CreateMomentView: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isEditing ? "Save" : "Create") {
-                        if isEditing {
-                            updateMoment()
-                        } else {
-                            createMoment()
+                    // ✅ FIXED: Show loading state while saving
+                    if isSaving {
+                        ProgressView()
+                    } else {
+                        Button(isEditing ? "Save" : "Create") {
+                            if isEditing {
+                                updateMoment()
+                            } else {
+                                createMoment()
+                            }
                         }
+                        .disabled(title.isEmpty || selectedMediaItems.isEmpty)
                     }
-                    .disabled(title.isEmpty || selectedMediaItems.isEmpty)
                 }
             }
         }
     }
 
+    // ✅ FIXED: Add loading state during create
     private func createMoment() {
+        isSaving = true
+
         // Calculate grid position for new moment using selected size
         let desiredSize = GridPosition(
             column: 0,
@@ -128,12 +137,19 @@ struct CreateMomentView: View {
             gridPosition: gridPosition
         )
 
-        tripStore.addMoment(to: trip.id, moment: newMoment)
-        dismiss()
+        Task {
+            tripStore.addMoment(to: trip.id, moment: newMoment)
+            await MainActor.run {
+                isSaving = false
+                dismiss()
+            }
+        }
     }
 
+    // ✅ FIXED: Add loading state during update
     private func updateMoment() {
         guard let existingMoment = moment else { return }
+        isSaving = true
 
         var updatedMoment = existingMoment
         updatedMoment.title = title
@@ -146,8 +162,13 @@ struct CreateMomentView: View {
         updatedMoment.gridPosition.width = Int(momentWidth)
         updatedMoment.gridPosition.height = momentHeight
 
-        tripStore.updateMoment(in: trip.id, moment: updatedMoment)
-        dismiss()
+        Task {
+            tripStore.updateMoment(in: trip.id, moment: updatedMoment)
+            await MainActor.run {
+                isSaving = false
+                dismiss()
+            }
+        }
     }
 }
 
